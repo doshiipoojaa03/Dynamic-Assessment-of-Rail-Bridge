@@ -1,0 +1,18 @@
+{
+	"packages": [
+		"numpy",
+		"requests",
+		"scipy",
+		"pandas",
+		"matplotlib"
+	],
+	"allow-io": true,
+  "filesystem": true,
+	"fetch": [
+		{
+			"files": [
+				"./pyscript_engineers_web.py"
+			]
+		}
+	]
+}

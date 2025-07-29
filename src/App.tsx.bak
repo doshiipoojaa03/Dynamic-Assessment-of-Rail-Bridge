@@ -1,0 +1,587 @@
+import React, { useState, useEffect, useRef } from "react";
+import { Panel,Typography, TextField, Button, Scrollbars, Grid } from "@midasit-dev/moaui"; 
+import { DropList } from '@midasit-dev/moaui';
+import { midasAPI } from "./Function/Common";
+import  ComponentsTableBundle  from "./Function/ComponentsTableBundle";
+import { iterativeResponseSpectrum, runAnalysisWithInputsUI } from "./utils_pyscript";
+import { mapi_key } from "./utils_pyscript";
+import { useSnackbar, SnackbarProvider } from "notistack";
+import ComponentsIconAdd from "./Function/ComponentsIconAdd";
+import * as XLSX from 'xlsx';
+// import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
+// import { GuideBox, Alert } from "@midasit-dev/moaui";
+// import ComponentsAlertError from "./Function/ComponentsAlertError";
+
+let globalStructureGroups: { [key: number]: string } = {};
+let globalBoundaryGroups: { [key: number]: string } = {};
+let globalRsLoadCases: { [key: number]: string } = {};
+interface Displacement {
+    Dx: number;
+    Dy: number;
+    Dz: number;
+}
+let globalkey: string = "";
+interface IterationResults {
+    [key: string]: Displacement;
+}
+
+interface Results {
+    [key: string]: IterationResults;
+}
+const App = () => {
+  const [structureGroups, setStructureGroups] = useState<Map<string, number>>(new Map());
+  const [boundaryGroups, setBoundaryGroups] = useState<Map<string, number>>(new Map());
+  const [rsLoadCases, setRsLoadCases] = useState<Map<string, number>>(new Map());
+  const [selectedStructureGroup, setSelectedStructureGroup] = useState("");
+  const [selectedBoundaryGroup, setSelectedBoundaryGroup] = useState("");
+  const [selectedRsLoadCase, setSelectedRsLoadCase] = useState("");
+  const [tolerance, setTolerance] = useState("0.01");
+  const [iterations, setIterations] = useState<Map<string, number>>(new Map());
+  const [results, setResults] = useState({});
+  const [selectedIteration, setSelectedIteration] = useState(null);
+  const [tableData, setTableData] = useState<{ [key: string]: Displacement }>({});
+  const [data, setData] = useState(null);
+  const { enqueueSnackbar } = useSnackbar();
+  const [csvData, setCsvData] = useState<string>("");
+  // Fetch data for dropdowns
+  const [triggerFetch, setTriggerFetch] = useState<boolean>(false);
+	
+	// Rail Load API
+  const XLSX = require('xlsx');
+
+  const bridgeTypes = new Map([
+    ["Steel and Composite", "Steel and Composite"],
+    ["Prestressed Concrete", "Prestressed Concrete"],
+    ["Filler Beam and Reinforced Concrete", "Filler Beam and Reinforced Concrete"],
+    ["User defined", "User defined"]
+  ]);
+
+  const [initialSpeed, setInitialSpeed] = useState<string>('60');
+  const [finalSpeed, setFinalSpeed] = useState<string>('200');
+  const [speedIncrement, setSpeedIncrement] = useState<string>('5');
+  const [timeStepIncrement, setTimeStepIncrement] = useState<string>('0.0001');
+
+  const [bridgeType, setBridgeType] = useState<string>('');
+  const [damping, setDamping] = useState<string>('');
+  const [isDampingEnabled, setIsDampingEnabled] = useState<boolean>(false);
+
+  const [trainLoadFile, setTrainLoadFile] = useState<File | null>(null);
+  const [trainLoadFilename, setTrainLoadFilename] = useState<string>('');
+
+  const [railTrackNode, setRailTrackNode] = useState<string>('');
+  const [accelerationNode, setAccelerationNode] = useState<string>('');
+  const [excelData, setExcelData] = useState<any[][] | null>(null);
+  const [availableGroups, setAvailableGroups] = useState<Map<string, string>>(new Map());
+
+  // const [imageUrl, setImageUrl] = useState<string | null>(null);
+
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleBridgeTypeChange = (value: string) => {
+    setBridgeType(value);
+    setIsDampingEnabled(value === 'User defined');
+    if (value !== 'User defined') {
+      setDamping('');
+    }
+  };
+
+  const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (file) {
+      setTrainLoadFile(file);
+      setTrainLoadFilename(file.name);
+
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const data = new Uint8Array(e.target?.result as ArrayBuffer);
+        const workbook = XLSX.read(data, { type: 'array' });
+        const sheetName = workbook.SheetNames[0];
+        const worksheet = workbook.Sheets[sheetName];
+        const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
+        setExcelData(jsonData);
+      };
+      reader.readAsArrayBuffer(file);
+    }
+  };
+
+  // To fetch Group Names
+  useEffect(() => {
+  const fetchGroupNames = async () => {
+    try {
+      const response = await midasAPI("GET", "/db/GRUP");
+      const grup = response.GRUP;
+
+      if (grup) {
+        // Create a Map<string, string> where both key and value are NAME
+        const groupMap = new Map<string, string>(
+          Object.values(grup).map((val: any) => [val.NAME, val.NAME])
+        );
+
+        setAvailableGroups(groupMap);
+
+        // Set default selections
+        const names = Array.from(groupMap.keys());
+        if (names.length > 0) {
+          setRailTrackNode(names[0]);         // "track"
+          if (names.length > 1) {
+            setAccelerationNode(names[1]);    // "girder"
+          }
+        }
+      }
+    } catch (error) {
+      console.error("Failed to fetch GRUP:", error);
+    }
+  };
+
+  fetchGroupNames();
+}, []);
+
+
+const handleRunAnalysis = async () => {
+  if (!trainLoadFile) {
+    alert("Please upload the train load Excel file.");
+    return;
+  }
+  const globalkey = mapi_key
+  try {
+    const result = await runAnalysisWithInputsUI({
+      initial: parseInt(initialSpeed),
+      final: parseInt(finalSpeed),
+      step: parseInt(speedIncrement),
+      time_step: parseFloat(timeStepIncrement),
+      bridge_type: bridgeType,
+      damping_input: damping,
+      track_group: railTrackNode,
+      girder_group: accelerationNode,
+      file: trainLoadFile,
+      globalkey 
+    });
+
+    if (result.status === "completed") {
+    //setImageUrl(`data:image/png;base64,${result.output}`);
+    } else {
+      alert("Analysis failed.");
+    }
+  } catch (err) {
+    console.error("Analysis error:", err);
+    alert("Failed to run analysis. Check console for details.");
+  }
+};
+
+
+  const handleReset = () => {
+    setInitialSpeed('60');
+    setFinalSpeed('200');
+    setSpeedIncrement('5');
+    setTimeStepIncrement('0.0001');
+    setBridgeType('');
+    setDamping('');
+    setIsDampingEnabled(false);
+    setTrainLoadFile(null);
+    setTrainLoadFilename('');
+    setRailTrackNode('');
+   };  setAccelerationNode('');
+  //   setExcelData(null); // Hide the Excel panel on refresh
+
+		if (fileInputRef.current) {
+    fileInputRef.current.value = '';
+  }
+  
+ 
+  const resetAndFetchData = () => {
+	  // Reset state variables
+	//   setStructureGroups(new Map());
+	  setBoundaryGroups(new Map());
+	  setRsLoadCases(new Map());
+	  setIterations(new Map());
+	  setSelectedIteration(null);
+	  setResults({});
+	  setTableData({});
+	  setCsvData("");
+	  // Trigger fetch
+	  setTriggerFetch(prev => !prev);
+  };
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        // const structureResponse = await midasAPI("GET","/db/GRUP",{});
+        const boundaryResponse = await midasAPI("GET","/db/BNGR",{});
+        const rsLoadCaseResponse = await midasAPI("GET","/db/SPLC",{});
+		// const grupData = structureResponse.GRUP;
+        const bngData = boundaryResponse.BNGR;
+		const splcData = rsLoadCaseResponse.SPLC;
+        // const mappedItems = new Map<string, number>(
+		// // 	Object.keys(grupData).map((key) => {
+		// // 	  const group = grupData[key];
+		// // 	  return [group.NAME, parseInt(key)];  // You can adjust this as needed
+		// // 	})
+		// //   );
+		  const mappedItems_bng = new Map<string, number>(
+			Object.keys(bngData).map((key) => {
+			  const group = bngData[key];
+			  return [group.NAME, parseInt(key)];  // You can adjust this as needed
+			})
+		  );
+		  const mappedItems_splc = new Map<string, number>(
+			Object.keys(splcData).map((key) => {
+			  const group = splcData[key];
+			  return [group.NAME, parseInt(key)];  // You can adjust this as needed
+			})
+		  );
+		//  globalStructureGroups = Object.keys(grupData).reduce((acc, key) => {
+        //   acc[parseInt(key)] = grupData[key].NAME;
+        //   return acc;
+        // }, {} as { [key: number]: string });
+
+        globalBoundaryGroups = Object.keys(bngData).reduce((acc, key) => {
+          acc[parseInt(key)] = bngData[key].NAME;
+          return acc;
+        }, {} as { [key: number]: string });
+
+        globalRsLoadCases = Object.keys(splcData).reduce((acc, key) => {
+          acc[parseInt(key)] = splcData[key].NAME;
+          return acc;
+        }, {} as { [key: number]: string });
+        // setStructureGroups(mappedItems);
+        setBoundaryGroups(mappedItems_bng);   
+        setRsLoadCases(mappedItems_splc);
+      } catch (error) {
+        console.error("Error fetching data:", error);
+      }
+    };
+    fetchData();
+  }, [triggerFetch]);    
+  
+ 
+  // Update table when iteration changes
+  useEffect(() => {
+	if (selectedIteration && results[selectedIteration]) {
+		const formattedData = Object.keys(results[selectedIteration]).reduce((acc: { [key: string]: Displacement }, key) => {
+			const displacement = results[selectedIteration][key] as Displacement;
+			acc[key] = {
+				Dx: displacement.Dx !== undefined ? parseFloat(displacement.Dx.toFixed(4)) : 0,
+				Dy: displacement.Dy !== undefined ? parseFloat(displacement.Dy.toFixed(4)) : 0,
+				Dz: displacement.Dz !== undefined ? parseFloat(displacement.Dz.toFixed(4)) : 0,
+			};
+			return acc;
+		}, {} as { [key: string]: Displacement });
+
+		setTableData(formattedData);
+
+		// Convert formattedData to CSV string
+		const csvRows = [
+			["Key", "Dx", "Dy", "Dz"], // Header row
+			...Object.entries(formattedData).map(([key, displacement]) => [
+				key,
+				displacement.Dx,
+				displacement.Dy,
+				displacement.Dz,
+			]),
+		];
+
+		const csvString = csvRows.map(row => row.join("\t")).join("\n");
+		setCsvData(csvString);
+	}
+}, 
+
+// const handleRunAnalysis = async () => {
+//     try {
+// 		if (!selectedBoundaryGroup && !selectedRsLoadCase) {
+// 			enqueueSnackbar("Please select the required boundary group and Load Case before running the analysis.", {
+// 				variant: "error",
+// 				anchorOrigin: { vertical: "top", horizontal: "center" },
+// 			});
+// 			return;
+// 		}	
+// 		// if (!selectedStructureGroup && !selectedBoundaryGroup) {
+// 		// 	enqueueSnackbar("Please select the required groups before running the analysis.", {
+// 		// 		variant: "error",
+// 		// 		anchorOrigin: { vertical: "top", horizontal: "center" },
+// 		// 	});
+// 		// 	return;
+// 		// }
+// 		// if (!selectedStructureGroup) {
+// 		// 	enqueueSnackbar("Please select the required Structure Group before running the analysis.", {
+// 		// 		variant: "error",
+// 		// 		anchorOrigin: { vertical: "top", horizontal: "center" },
+// 		// 	});
+// 		// 	return;
+// 		// }
+// 		if (!selectedBoundaryGroup) {
+// 			enqueueSnackbar("Please select the required Boundary Group before running the analysis.", {
+// 				variant: "error",
+// 				anchorOrigin: { vertical: "top", horizontal: "center" },
+// 			});
+// 			return;
+// 		}	
+// 		if (!selectedRsLoadCase) {
+// 			enqueueSnackbar("Please select the required Load Case before running the analysis.", {
+// 				variant: "error",
+// 				anchorOrigin: { vertical: "top", horizontal: "center" },
+// 			});
+// 			return;
+// 		}	
+// 		if (tolerance === '' || isNaN(parseFloat(tolerance))) {
+// 			enqueueSnackbar("Please enter a valid tolerance value.", {
+// 				variant: "error",
+// 				anchorOrigin: { vertical: "top", horizontal: "center" },
+// 			});
+// 			return;
+// 		}
+// 		enqueueSnackbar("Please wait while running analysis...", {
+// 			variant: "info",
+// 			anchorOrigin: { vertical: "top", horizontal: "center" },
+// 		  });
+// 		  setTimeout(async () => {
+//             console.log(
+//                 globalStructureGroups[parseInt(selectedStructureGroup)],
+//                 globalBoundaryGroups[parseInt(selectedBoundaryGroup)],
+//                 globalRsLoadCases[parseInt(selectedRsLoadCase)],
+//                 tolerance
+//             );
+//             globalkey = mapi_key;
+
+//             try {
+//                 const result = await iterativeResponseSpectrum(
+//                     globalBoundaryGroups[parseInt(selectedBoundaryGroup)],
+//                     globalRsLoadCases[parseInt(selectedRsLoadCase)],
+//                     parseFloat(tolerance),
+//                     globalkey
+//                 );
+//                 console.log("Analysis results:", result);
+//                 setResults(result);
+//                 const mappedIterations = new Map<string, number>(
+//                     Object.keys(result).map((key) => {
+//                         return [key, parseInt(key)];  // Adjust as needed
+//                     })
+//                 );
+//                 setIterations(mappedIterations);
+//                 console.log("Mapped iterations:", mappedIterations);
+//                 console.log("Analysis results:", result);
+//                 enqueueSnackbar("Analysis completed successfully!", {
+//                     variant: "success",
+//                     anchorOrigin: { vertical: "top", horizontal: "center" },
+//                 });
+//             } catch (error) {
+//                 enqueueSnackbar("Error while running analysis!", {
+//                     variant: "error",
+//                     anchorOrigin: { vertical: "top", horizontal: "center" },
+//                 });
+//                 console.error("Error running analysis:", error);
+//             }
+//         }, 0);
+//     } catch (error) {
+// 		enqueueSnackbar("Error while running analysis!", {
+// 			variant: "error",
+// 			anchorOrigin: { vertical: "top", horizontal: "center" },
+// 		  })
+//       console.error("Error running analysis:", error);
+//     }
+//   };
+//   const handleDownload = () => {
+// 	// Process the downloaded Excel file
+// 	if (Object.keys(results).length === 0) {
+// 		enqueueSnackbar("Please run analysis first.", {
+// 			variant: "warning",
+// 			anchorOrigin: { vertical: "top", horizontal: "center" },
+// 		});
+// 		return;
+// 	}
+// 	// const workbook = XLSX.utils.book_new();
+//     // const worksheetData = [["Key", "Dx", "Dy", "Dz"]]; // Header row
+
+// 	// Object.keys(results).forEach(iteration => {
+//     //     const iterationResults = results[iteration];
+//     //     Object.keys(iterationResults).forEach(key => {
+//     //         const displacement = iterationResults[key];
+//     //         worksheetData.push([
+//     //             key,
+//     //             displacement.Dx !== undefined ? displacement.Dx : 0,
+//     //             displacement.Dy !== undefined ? displacement.Dy : 0,
+//     //             displacement.Dz !== undefined ? displacement.Dz : 0,
+//     //         ]);
+//     //     });
+//     // });
+
+//     // const worksheet = XLSX.utils.aoa_to_sheet(worksheetData);
+//     // XLSX.utils.book_append_sheet(workbook, worksheet, "Results");
+
+// 	// 	// Generate the modified Excel file and create a Blob object
+// 	// 	const excelBuffer = XLSX.write(workbook, { bookType: 'xlsx', type: 'array' });
+// 	// 	const modifiedBlob = new Blob([excelBuffer], { type: 'application/octet-stream' });
+
+// 	// 	// Trigger the download of the modified Excel file
+// 	// 	const link = document.createElement('a');
+// 	// 	link.href = URL.createObjectURL(modifiedBlob);
+// 	// 	link.download = 'Iterations_result.xlsx';
+// 	// 	document.body.appendChild(link);
+// 	// 	link.click();
+// 	// 	document.body.removeChild(link);
+// };
+  )
+  
+return (
+    <div style={{ display: 'flex', justifyContent: 'center', width: '100%' }}>
+      <Grid container direction="row" spacing={2} justifyContent="center" alignItems="flex-start" style={{ width: 'auto' }}>
+        {/* Left Panel - Main Form */}
+        <Grid item>
+          <Panel width="720px" height="515px" marginTop={3}>
+            <Panel width="680px" height="50px" variant="box">
+              <Typography variant="h1" color="primary" center size="large">
+                MIDAS Train Load API
+              </Typography>
+            </Panel>
+
+            <Panel width="680px" height="140px" variant="strock" marginTop={0}>
+              <Grid container direction='row'>
+                <Grid item xs={4}>
+                  <Typography marginTop={1} variant="body2">Initial Speed (kmph)</Typography>
+                  <div style={{ marginTop: '10px' }}>
+                    <TextField width="220px" value={initialSpeed} onChange={(e) => setInitialSpeed(e.target.value)} />
+                  </div>
+                </Grid>
+                <Grid item xs={4} marginLeft={25}>
+                  <Typography marginTop={1} variant="body2">Final Speed (kmph)</Typography>
+                  <div style={{ marginTop: '10px' }}>
+                    <TextField width="220px" value={finalSpeed} onChange={(e) => setFinalSpeed(e.target.value)} />
+                  </div>
+                </Grid>
+              </Grid>
+              <Grid container direction='row'>
+                <Grid item xs={4}>
+                  <Typography marginTop={1} variant="body2">Speed Increment (kmph)</Typography>
+                  <div style={{ marginTop: '10px' }}>
+                    <TextField width="220px" value={speedIncrement} onChange={(e) => setSpeedIncrement(e.target.value)} />
+                  </div>
+                </Grid>
+                <Grid item xs={4} marginLeft={25}>
+                  <Typography marginTop={1} variant="body2">Time Step Increment (sec)</Typography>
+                  <div style={{ marginTop: '10px' }}>
+                    <TextField width="220px" value={timeStepIncrement} onChange={(e) => setTimeStepIncrement(e.target.value)} />
+                  </div>
+                </Grid>
+              </Grid>
+            </Panel>
+
+            <Panel width="680px" height="80px" variant="strock" marginTop={1}>
+              <Grid container direction='row'>
+                <Grid item xs={4}>
+                  <Typography marginTop={1} variant="body2">Bridge Type for Damping</Typography>
+                  <div style={{ marginTop: '10px' }}>
+                    <DropList
+                      itemList={bridgeTypes}
+                      width="220px"
+                      value={bridgeType}
+                      onChange={(e) => handleBridgeTypeChange(e.target.value)}
+                    />
+                  </div>
+                </Grid>
+                <Grid item xs={4} marginLeft={25}>
+                  <Typography marginTop={1} variant="body2">Percentage Damping</Typography>
+                  <div style={{ marginTop: '10px' }}>
+                    <TextField
+                      width="220px"
+                      value={damping}
+                      onChange={(e) => setDamping(e.target.value)}
+                      disabled={!isDampingEnabled}
+                    />
+                  </div>
+                </Grid>
+              </Grid>
+            </Panel>
+
+            <Panel width="680px" height="150px" variant="strock" marginTop={1}>
+              <Typography marginTop={1} variant="body2">Train Load File (.xlsx)</Typography>
+              <div style={{ marginTop: '15px' }}>
+                <TextField width="158px" value={trainLoadFilename} disabled />
+                <Button color="normal" width="30px" onClick={() => fileInputRef.current?.click()}>
+                  Browse
+                </Button>
+                <input
+                  type="file"
+                  style={{ display: 'none' }}
+                  accept=".csv,.xlsx"
+                  ref={fileInputRef}
+                  onChange={handleFileSelect}
+                />
+              </div>
+              <Grid container direction='row'>
+                <Grid item xs={4}>
+                  <Typography marginTop={1} variant="body2">Rail Track Nodes</Typography>
+                  <div style={{ marginTop: '10px' }}>
+                    <DropList
+                      itemList={availableGroups} // Map<string, string>
+                      width="220px"
+                      value={railTrackNode}
+                      onChange={(e) => setRailTrackNode(e.target.value)}
+                    />
+
+                  </div>
+                </Grid>
+                <Grid item xs={4} marginLeft={25}>
+                  <Typography marginTop={1} variant="body2">Acceleration Output Nodes</Typography>
+                  <div style={{ marginTop: '10px' }}>
+                    <DropList
+                      itemList={availableGroups}
+                      width="220px"
+                      value={accelerationNode}
+                      onChange={(e) => setAccelerationNode(e.target.value)}
+                    />
+                  </div>
+                </Grid>
+              </Grid>
+            </Panel>
+
+            <Panel flexItem justifyContent='space-between' width="680px" height="80px" variant="box" marginTop={1} marginLeft={1}>
+              <Button color="normal" width="auto" onClick={handleRunAnalysis}>
+                Run Analysis
+              </Button>
+              <div style={{ width: "10px" }}></div>
+              <Button color="normal" width="auto" onClick={handleReset}>
+                Refresh
+              </Button>
+            </Panel>
+          </Panel>
+        </Grid>
+
+        {/* Right Panel - Excel Preview */}
+        {excelData && (
+          <Grid item>
+            <Panel width="680px" height="257px" variant="strock" marginTop={3}>
+              <Typography variant="h1" color="primary" marginBottom={1}>Excel Preview</Typography>
+              <div style={{ maxHeight: '215px', overflowY: 'auto' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                  <tbody>
+                    {excelData.map((row, rowIndex) => (
+                      <tr key={rowIndex}>
+                        {row.map((cell, cellIndex) => (
+                          <td key={cellIndex} style={{ border: '1px solid #ccc', padding: '5px' }}>{cell}</td>
+                        ))}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </Panel>
+          </Grid>
+        )}
+        {/* {imageUrl && (
+          <Grid item>
+            <Panel width="680px" height="auto" variant="strock" marginTop={3}>
+              <Typography variant="h1" color="primary" marginBottom={1}>Analysis Preview</Typography>
+                <div style={{ textAlign: 'center', padding: '10px' }}>
+                  <img
+                    src={imageUrl}
+                       alt="Train Speed vs Acceleration Plot"
+                      style={{ maxWidth: '100%', height: 'auto', border: '1px solid #ccc', borderRadius: '4px' }}
+                 />
+                </div>
+            </Panel>
+          </Grid>
+        )} */}
+
+      </Grid>
+    </div>
+  );
+};
+export default App;
