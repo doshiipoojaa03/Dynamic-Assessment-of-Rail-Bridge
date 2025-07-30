@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
-import { Panel,Typography, TextField, Button, Scrollbars, Grid } from "@midasit-dev/moaui"; 
+import { Panel,Typography, TextField, Button, Scrollbars, Grid, ChartLine } from "@midasit-dev/moaui"; 
 import { DropList } from '@midasit-dev/moaui';
 import { midasAPI } from "./Function/Common";
 import  ComponentsTableBundle  from "./Function/ComponentsTableBundle";
@@ -72,6 +72,9 @@ const App = () => {
   const [accelerationNode, setAccelerationNode] = useState<string>('');
   const [excelData, setExcelData] = useState<any[][] | null>(null);
   const [availableGroups, setAvailableGroups] = useState<Map<string, string>>(new Map());
+
+  const [chartData, setChartData] = useState<any[]>([]);
+
 
   // const [imageUrl, setImageUrl] = useState<string | null>(null);
 
@@ -157,19 +160,26 @@ const handleRunAnalysis = async () => {
       globalkey 
     });
 
-    if (result.status === "completed") {
-    //setImageUrl(`data:image/png;base64,${result.output}`);
-    } else {
-      alert("Analysis failed.");
+   if (result.status === "completed") {
+  const lineData = [
+    {
+      id: "Speed vs Acceleration",
+      color: "#f47560",
+      data: result.points  // List of {x, y}
     }
-  } catch (err) {
+  ];
+  setChartData(lineData);
+} else {
+  alert("Analysis failed.");
+};
+  }catch (err) {
     console.error("Analysis error:", err);
     alert("Failed to run analysis. Check console for details.");
   }
 };
 
 
-  const handleReset = () => {
+  function handleReset() {
     setInitialSpeed('60');
     setFinalSpeed('200');
     setSpeedIncrement('5');
@@ -182,7 +192,8 @@ const handleRunAnalysis = async () => {
     setRailTrackNode('');
     setAccelerationNode('');
     setExcelData(null); // Hide the Excel panel on refresh
-   };  
+    setChartData([]);
+  }  
 		if (fileInputRef.current) {
     fileInputRef.current.value = '';
   }
@@ -425,14 +436,14 @@ return (
       <Grid container direction="row" spacing={2} justifyContent="center" alignItems="flex-start" style={{ width: 'auto' }}>
         {/* Left Panel - Main Form */}
         <Grid item>
-          <Panel width="720px" height="515px" marginTop={3}>
-            <Panel width="680px" height="50px" variant="box">
+          <Panel width="520px" height="515px" marginTop={3}>
+            <Panel width="520px" height="50px" variant="box">
               <Typography variant="h1" color="primary" center size="large">
                 MIDAS Train Load API
               </Typography>
             </Panel>
 
-            <Panel width="680px" height="140px" variant="strock" marginTop={0}>
+            <Panel width="499px" height="140px" variant="strock" marginTop={0}>
               <Grid container direction='row'>
                 <Grid item xs={4}>
                   <Typography marginTop={1} variant="body2">Initial Speed (kmph)</Typography>
@@ -440,7 +451,7 @@ return (
                     <TextField width="220px" value={initialSpeed} onChange={(e) => setInitialSpeed(e.target.value)} />
                   </div>
                 </Grid>
-                <Grid item xs={4} marginLeft={25}>
+                <Grid item xs={4} marginLeft={10}>
                   <Typography marginTop={1} variant="body2">Final Speed (kmph)</Typography>
                   <div style={{ marginTop: '10px' }}>
                     <TextField width="220px" value={finalSpeed} onChange={(e) => setFinalSpeed(e.target.value)} />
@@ -454,7 +465,7 @@ return (
                     <TextField width="220px" value={speedIncrement} onChange={(e) => setSpeedIncrement(e.target.value)} />
                   </div>
                 </Grid>
-                <Grid item xs={4} marginLeft={25}>
+                <Grid item xs={4} marginLeft={10}>
                   <Typography marginTop={1} variant="body2">Time Step Increment (sec)</Typography>
                   <div style={{ marginTop: '10px' }}>
                     <TextField width="220px" value={timeStepIncrement} onChange={(e) => setTimeStepIncrement(e.target.value)} />
@@ -463,7 +474,7 @@ return (
               </Grid>
             </Panel>
 
-            <Panel width="680px" height="80px" variant="strock" marginTop={1}>
+            <Panel width="499px" height="80px" variant="strock" marginTop={1}>
               <Grid container direction='row'>
                 <Grid item xs={4}>
                   <Typography marginTop={1} variant="body2">Bridge Type for Damping</Typography>
@@ -476,7 +487,7 @@ return (
                     />
                   </div>
                 </Grid>
-                <Grid item xs={4} marginLeft={25}>
+                <Grid item xs={4} marginLeft={10}>
                   <Typography marginTop={1} variant="body2">Percentage Damping</Typography>
                   <div style={{ marginTop: '10px' }}>
                     <TextField
@@ -490,7 +501,7 @@ return (
               </Grid>
             </Panel>
 
-            <Panel width="680px" height="150px" variant="strock" marginTop={1}>
+            <Panel width="499px" height="150px" variant="strock" marginTop={1}>
               <Typography marginTop={1} variant="body2">Train Load File (.xlsx)</Typography>
               <div style={{ marginTop: '15px' }}>
                 <TextField width="158px" value={trainLoadFilename} disabled />
@@ -518,7 +529,7 @@ return (
 
                   </div>
                 </Grid>
-                <Grid item xs={4} marginLeft={25}>
+                <Grid item xs={4} marginLeft={10}>
                   <Typography marginTop={1} variant="body2">Acceleration Output Nodes</Typography>
                   <div style={{ marginTop: '10px' }}>
                     <DropList
@@ -532,7 +543,7 @@ return (
               </Grid>
             </Panel>
 
-            <Panel flexItem justifyContent='space-between' width="680px" height="80px" variant="box" marginTop={1} marginLeft={1}>
+            <Panel flexItem justifyContent='center' width="499px" height="80px" variant="box" marginTop={1} marginLeft={1}>
               <Button color="normal" width="auto" onClick={handleRunAnalysis}>
                 Run Analysis
               </Button>
@@ -543,44 +554,71 @@ return (
             </Panel>
           </Panel>
         </Grid>
-        {/* Right Panel - Excel Preview */}
-        {excelData && (
-          <Grid item>
-            <Panel width="680px" height="257px" variant="strock" marginTop={3}>
-              <Typography variant="h1" color="primary" marginBottom={1}>Excel Preview</Typography>
-              <div style={{ maxHeight: '215px', overflowY: 'auto' }}>
-                <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-                  <tbody>
-                    {excelData.map((row, rowIndex) => (
-                      <tr key={rowIndex}>
-                        {row.map((cell, cellIndex) => (
-                          <td key={cellIndex} style={{ border: '1px solid #ccc', padding: '5px' }}>{cell}</td>
+        <Grid container direction="column" spacing={2} justifyContent="center" alignItems="flex-start" marginTop={0} marginLeft={1} style={{ width: 'auto' }}>
+            {excelData && (
+              <Grid item>
+                <Panel width="680px" height="220px" variant="strock" marginTop={3}>
+                  <Typography variant="h1" color="primary" marginBottom={1}>Excel Preview</Typography>
+                  <div style={{ maxHeight: '180px', overflowY: 'auto' }}>
+                    <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                      <tbody>
+                        {excelData.map((row, rowIndex) => (
+                          <tr key={rowIndex}>
+                            {row.map((cell, cellIndex) => (
+                              <td key={cellIndex} style={{ border: '1px solid #ccc', padding: '5px' }}>{cell}</td>
+                            ))}
+                          </tr>
                         ))}
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </Panel>
-          </Grid>
-        )}
-        {/* {imageUrl && (
-          <Grid item>
-            <Panel width="680px" height="auto" variant="strock" marginTop={3}>
-              <Typography variant="h1" color="primary" marginBottom={1}>Analysis Preview</Typography>
-                <div style={{ textAlign: 'center', padding: '10px' }}>
-                  <img
-                    src={imageUrl}
-                       alt="Train Speed vs Acceleration Plot"
-                      style={{ maxWidth: '100%', height: 'auto', border: '1px solid #ccc', borderRadius: '4px' }}
-                 />
-                </div>
-            </Panel>
-          </Grid>
-        )} */}
-
-      </Grid>
+                      </tbody>
+                    </table>
+                  </div>
+                </Panel>
+              </Grid>
+            )}
+            {chartData.length > 0 && (
+              <Grid item>
+                <Panel width="680px" height="280px" variant="strock" marginTop={0}>
+                  <Typography variant="h1" color="primary" marginBottom={0}>Speed vs Acceleration</Typography>
+                  <ChartLine 
+                    data={chartData}
+                    axisTop
+                    axisTopTickValues={5}
+                    axisTopDecimals={1}
+                    axisTopLegend="Speed (km/h)"
+                    axisRight
+                    axisRightTickValues={5}
+                    axisRightDecimals={2}
+                    axisRightLegend="Acceleration (m/s²)"
+                    width={600}
+                    height={300}
+                    pointSize={0}
+                    marginTop={60}
+                    marginRight={70}
+                    marginLeft={60}
+                    marginBottom={60}
+                  />
+                </Panel>
+              </Grid>
+            )}
+          </Grid>   
+    </Grid>
     </div>
   );
 };
 export default App;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+        

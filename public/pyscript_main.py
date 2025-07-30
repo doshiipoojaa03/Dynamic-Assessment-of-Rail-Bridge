@@ -806,6 +806,20 @@ def iterative_response_spectrum(Boundary_group_name, load_case_name, threshold_p
 
 # Rail Load API 
 
+# Expose PyScript global setter so React can access it
+_g_values = {}
+def set_g_values(payload):
+    global _g_values, civil, base_url, mapi_key
+    _g_values = json.loads(payload)
+    g_base_uri = _g_values["g_base_uri"]
+    g_base_port = _g_values["g_base_port"]
+    mapi_key = _g_values["g_mapi_key"]
+    base_url = f'https://{g_base_uri}:{g_base_port}/civil'
+    civil = MidasAPI(Product.CIVIL, "KR")
+
+def get_g_values():
+    return json.dumps(_g_values)
+
 def Track_details(group_name, groups, nodes):
     track_details = []
     track_nodes = None
@@ -935,20 +949,6 @@ def force_functions(train_load, coordinate, speeds, bridge_length, train_length,
         }
     return THLC, THFC, THNL
 
-# Expose PyScript global setter so React can access it
-_g_values = {}
-def set_g_values(payload):
-    global _g_values, civil, base_url, mapi_key
-    _g_values = json.loads(payload)
-    g_base_uri = _g_values["g_base_uri"]
-    g_base_port = _g_values["g_base_port"]
-    mapi_key = _g_values["g_mapi_key"]
-    base_url = f'https://{g_base_uri}:{g_base_port}/civil'
-    civil = MidasAPI(Product.CIVIL, "KR")
-
-def get_g_values():
-    return json.dumps(_g_values)
-
 # ------------------ High-Level Callable ------------------
 def run_analysis():
     Analysis = {}
@@ -961,8 +961,8 @@ def run_analysis_with_inputs(initial, final, step, time_step, bridge_type, dampi
     # grp = MidasAPI_gen("GET","/db/grup",{})
     # print(grp);
     units = {"Assign": {"1": {"FORCE": "KN", "DIST": "M", "HEAT": "BTU", "TEMPER": "C"}}}
-    uni = MidasAPI_gen("PUT","/db/unit", units)
-    print(uni)
+    MidasAPI_gen("PUT","/db/unit", units)
+    # print(uni)
 
     groups = MidasAPI_gen("GET","/db/grup",{})
     nodes = MidasAPI_gen("GET","/db/node",{})
@@ -989,19 +989,17 @@ def run_analysis_with_inputs(initial, final, step, time_step, bridge_type, dampi
     
 
     THLC, THFC, THNL = force_functions(train_load, coordinate, speeds, bridge_length, train_length, damping_val, time_step)
-    print("Apoorva")
     # print(THLC,THFC,THNL)
     THFC_clean = convert_numpy(THFC)
-    print(THFC_clean)
+    # print(THFC_clean)
     MidasAPI_gen("PUT","/db/thfc", THFC_clean)
     
     THLC_clean = convert_numpy(THLC)
     THNL_clean = convert_numpy(THNL)
-    print("THLC_CLEAN",THLC_clean)
+    # print("THLC_CLEAN",THLC_clean)
 
     MidasAPI_gen("PUT","/db/this", THLC_clean)
     MidasAPI_gen("PUT","/db/thnl", THNL_clean)
-    print("Apoorva")
     MidasAPI_gen("POST", "/doc/ANAL",THNL_clean)
 
     abs_max_values = []
@@ -1016,40 +1014,13 @@ def run_analysis_with_inputs(initial, final, step, time_step, bridge_type, dampi
             }
         }
         response = MidasAPI_gen("POST", "/post/table",acc)
-        if "empty" in response and "DATA" in response["empty"]:
+        if response and "empty" in response and "DATA" in response["empty"]:
             data_rows = response["empty"]["DATA"]
             dz_dz_values = [abs(float(row[1])) for row in data_rows]
             abs_max_values.append(max(dz_dz_values))
         else:
             abs_max_values.append(0)
 
-    #  # Convert and sort data
-    # x_vals = np.array(speeds).astype(int)
-    # y_vals = np.array(abs_max_values)
-    # sorted_idx = np.argsort(x_vals)
-    # x_vals = x_vals[sorted_idx]
-    # y_vals = y_vals[sorted_idx]
-
-    # x_smooth = np.linspace(x_vals.min(), x_vals.max(), 300)
-    # spline = make_interp_spline(x_vals, y_vals, k=2)
-    # y_smooth = spline(x_smooth)
-
-    # plt.figure(figsize=(10, 5))
-    # plt.plot(x_smooth, y_smooth, '-', label='Smooth Fit', color='red')
-    # plt.title("Train Speed vs Acceleration Plot")
-    # plt.xlabel("Train Speed (km/h)")
-    # plt.ylabel("Acceleration (m/s²)")
-    # plt.grid(True)
-    # plt.legend()
-    # plt.tight_layout()
-
-    # # Save to virtual file system
-    # plt.savefig("/plot.png")
-    # plt.close()
-
-    # Read back as binary from FS
-    # png_bytes = pyodide.FS.readFile("/plot.png", {"encoding": "binary"})
-    # base64_image = base64.b64encode(png_bytes.to_py()).decode("utf-8")
     x_vals = np.array(speeds).astype(int)
     y_vals = np.array(abs_max_values)
     sorted_idx = np.argsort(x_vals)
@@ -1063,7 +1034,8 @@ def run_analysis_with_inputs(initial, final, step, time_step, bridge_type, dampi
     # Convert to regular lists for JS/React
     points = [{"x": float(x), "y": float(y)} for x, y in zip(x_smooth, y_smooth)]
 
-    return {
+    result = {
         "status": "completed",
         "points": points
     }
+    return json.dumps(result)
