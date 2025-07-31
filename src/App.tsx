@@ -1,12 +1,14 @@
 import React, { useState, useEffect, useRef } from "react";
-import { Panel,Typography, TextField, Button, Scrollbars, Grid, ChartLine } from "@midasit-dev/moaui"; 
-import { DropList } from '@midasit-dev/moaui';
+import { Panel,Typography, TextField, Button, Scrollbars, Grid, ChartLine, IconButton } from "@midasit-dev/moaui"; 
+import { DropList, Dialog } from '@midasit-dev/moaui';
 import { midasAPI } from "./Function/Common";
 import  ComponentsTableBundle  from "./Function/ComponentsTableBundle";
 import { iterativeResponseSpectrum, runAnalysisWithInputsUI } from "./utils_pyscript";
 import { mapi_key } from "./utils_pyscript";
 import { useSnackbar, SnackbarProvider } from "notistack";
 import ComponentsIconAdd from "./Function/ComponentsIconAdd";
+import GraphPopupDialog from "./Components/GraphPopupDialog";
+import ComponentsIconButtonExpand from "./Components/ComponentsIconButtonExpand";
 import * as XLSX from 'xlsx';
 // import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 // import { GuideBox, Alert } from "@midasit-dev/moaui";
@@ -74,6 +76,7 @@ const App = () => {
   const [availableGroups, setAvailableGroups] = useState<Map<string, string>>(new Map());
 
   const [chartData, setChartData] = useState<any[]>([]);
+  const [isGraphPopupOpen, setIsGraphPopupOpen] = useState(false);
 
 
   // const [imageUrl, setImageUrl] = useState<string | null>(null);
@@ -432,134 +435,149 @@ const handleRunAnalysis = async () => {
   )
   
 return (
-    <div style={{ display: 'flex', justifyContent: 'center', width: '100%' }}>
-      <Grid container direction="row" spacing={2} justifyContent="center" alignItems="flex-start" style={{ width: 'auto' }}>
-        {/* Left Panel - Main Form */}
-        <Grid item>
-          <Panel width="520px" height="515px" marginTop={3}>
-            <Panel width="520px" height="50px" variant="box">
-              <Typography variant="h1" color="primary" center size="large">
-                MIDAS Train Load API
-              </Typography>
-            </Panel>
+  <div style={{ display: 'flex', justifyContent: 'center', width: 'auto' }}>
+    <Panel
+      width="auto"
+      height="auto"
+      marginTop={3}
+      style={{
+        display: 'flex',
+        flexDirection: 'column',
+        maxWidth: '1010px', // optional: to limit width on large screens
+        margin: '0 auto'    // center the panel horizontally
+      }}
+    >
 
-            <Panel width="499px" height="140px" variant="strock" marginTop={0}>
-              <Grid container direction='row'>
-                <Grid item xs={4}>
-                  <Typography marginTop={1} variant="body2">Initial Speed (kmph)</Typography>
-                  <div style={{ marginTop: '10px' }}>
-                    <TextField width="220px" value={initialSpeed} onChange={(e) => setInitialSpeed(e.target.value)} />
-                  </div>
-                </Grid>
-                <Grid item xs={4} marginLeft={10}>
-                  <Typography marginTop={1} variant="body2">Final Speed (kmph)</Typography>
-                  <div style={{ marginTop: '10px' }}>
-                    <TextField width="220px" value={finalSpeed} onChange={(e) => setFinalSpeed(e.target.value)} />
-                  </div>
-                </Grid>
+      {/* Panel Header */}
+      <Panel width="100%" height="50px" variant="box">
+        <Typography variant="h1" color="primary" center size="large">
+          MIDAS Train Load API
+        </Typography>
+      </Panel>
+
+      {/* Body Content */}
+      <div style={{ display: 'flex', flexDirection: 'row', gap: '20px', padding: '10px' }}>
+        {/* Left Column - Form */}
+        <Panel width="520px" height="445px">
+          <Panel width="499px" height="130px" variant="strock" marginTop={0}>
+            <Grid container direction="row">
+              <Grid item xs={4}>
+                <Typography marginTop={0} variant="body2">Initial Speed (kmph)</Typography>
+                <div style={{ marginTop: '10px' }}>
+                  <TextField width="220px" value={initialSpeed} onChange={(e) => setInitialSpeed(e.target.value)} />
+                </div>
               </Grid>
-              <Grid container direction='row'>
-                <Grid item xs={4}>
-                  <Typography marginTop={1} variant="body2">Speed Increment (kmph)</Typography>
-                  <div style={{ marginTop: '10px' }}>
-                    <TextField width="220px" value={speedIncrement} onChange={(e) => setSpeedIncrement(e.target.value)} />
-                  </div>
-                </Grid>
-                <Grid item xs={4} marginLeft={10}>
-                  <Typography marginTop={1} variant="body2">Time Step Increment (sec)</Typography>
-                  <div style={{ marginTop: '10px' }}>
-                    <TextField width="220px" value={timeStepIncrement} onChange={(e) => setTimeStepIncrement(e.target.value)} />
-                  </div>
-                </Grid>
+              <Grid item xs={4} marginLeft={10}>
+                <Typography marginTop={0} variant="body2">Final Speed (kmph)</Typography>
+                <div style={{ marginTop: '10px' }}>
+                  <TextField width="220px" value={finalSpeed} onChange={(e) => setFinalSpeed(e.target.value)} />
+                </div>
               </Grid>
-            </Panel>
-
-            <Panel width="499px" height="80px" variant="strock" marginTop={1}>
-              <Grid container direction='row'>
-                <Grid item xs={4}>
-                  <Typography marginTop={1} variant="body2">Bridge Type for Damping</Typography>
-                  <div style={{ marginTop: '10px' }}>
-                    <DropList
-                      itemList={bridgeTypes}
-                      width="220px"
-                      value={bridgeType}
-                      onChange={(e) => handleBridgeTypeChange(e.target.value)}
-                    />
-                  </div>
-                </Grid>
-                <Grid item xs={4} marginLeft={10}>
-                  <Typography marginTop={1} variant="body2">Percentage Damping</Typography>
-                  <div style={{ marginTop: '10px' }}>
-                    <TextField
-                      width="220px"
-                      value={damping}
-                      onChange={(e) => setDamping(e.target.value)}
-                      disabled={!isDampingEnabled}
-                    />
-                  </div>
-                </Grid>
+            </Grid>
+            <Grid container direction="row">
+              <Grid item xs={4}>
+                <Typography marginTop={1} variant="body2">Speed Increment (kmph)</Typography>
+                <div style={{ marginTop: '10px' }}>
+                  <TextField width="220px" value={speedIncrement} onChange={(e) => setSpeedIncrement(e.target.value)} />
+                </div>
               </Grid>
-            </Panel>
-
-            <Panel width="499px" height="150px" variant="strock" marginTop={1}>
-              <Typography marginTop={1} variant="body2">Train Load File (.xlsx)</Typography>
-              <div style={{ marginTop: '15px' }}>
-                <TextField width="158px" value={trainLoadFilename} disabled />
-                <Button color="normal" width="30px" onClick={() => fileInputRef.current?.click()}>
-                  Browse
-                </Button>
-                <input
-                  type="file"
-                  style={{ display: 'none' }}
-                  accept=".csv,.xlsx"
-                  ref={fileInputRef}
-                  onChange={handleFileSelect}
-                />
-              </div>
-              <Grid container direction='row'>
-                <Grid item xs={4}>
-                  <Typography marginTop={1} variant="body2">Rail Track Nodes</Typography>
-                  <div style={{ marginTop: '10px' }}>
-                    <DropList
-                      itemList={availableGroups} // Map<string, string>
-                      width="220px"
-                      value={railTrackNode}
-                      onChange={(e) => setRailTrackNode(e.target.value)}
-                    />
-
-                  </div>
-                </Grid>
-                <Grid item xs={4} marginLeft={10}>
-                  <Typography marginTop={1} variant="body2">Acceleration Output Nodes</Typography>
-                  <div style={{ marginTop: '10px' }}>
-                    <DropList
-                     itemList={availableGroups}
-                     width="220px"
-                     value={accelerationNode}
-                      onChange={(e) => setAccelerationNode(e.target.value)}
-                    />
-                  </div>
-                </Grid>
+              <Grid item xs={4} marginLeft={10}>
+                <Typography marginTop={1} variant="body2">Time Step Increment (sec)</Typography>
+                <div style={{ marginTop: '10px' }}>
+                  <TextField width="220px" value={timeStepIncrement} onChange={(e) => setTimeStepIncrement(e.target.value)} />
+                </div>
               </Grid>
-            </Panel>
-
-            <Panel flexItem justifyContent='center' width="499px" height="80px" variant="box" marginTop={1} marginLeft={1}>
-              <Button color="normal" width="auto" onClick={handleRunAnalysis}>
-                Run Analysis
-              </Button>
-              <div style={{ width: "10px" }}></div>
-              <Button color="normal" width="auto" onClick={handleReset}>
-                Refresh
-              </Button>
-            </Panel>
+            </Grid>
           </Panel>
-        </Grid>
-        <Grid container direction="column" spacing={2} justifyContent="center" alignItems="flex-start" marginTop={0} marginLeft={1} style={{ width: 'auto' }}>
+
+          <Panel width="499px" height="80px" variant="strock" marginTop={1}>
+            <Grid container direction="row">
+              <Grid item xs={4}>
+                <Typography marginTop={1} variant="body2">Bridge Type for Damping</Typography>
+                <div style={{ marginTop: '10px' }}>
+                  <DropList
+                    itemList={bridgeTypes}
+                    width="220px"
+                    value={bridgeType}
+                    onChange={(e) => handleBridgeTypeChange(e.target.value)}
+                  />
+                </div>
+              </Grid>
+              <Grid item xs={4} marginLeft={10}>
+                <Typography marginTop={1} variant="body2">Percentage Damping</Typography>
+                <div style={{ marginTop: '10px' }}>
+                  <TextField
+                    width="220px"
+                    value={damping}
+                    onChange={(e) => setDamping(e.target.value)}
+                    disabled={!isDampingEnabled}
+                  />
+                </div>
+              </Grid>
+            </Grid>
+          </Panel>
+
+          <Panel width="499px" height="150px" variant="strock" marginTop={1}>
+            <Typography marginTop={1} variant="body2">Train Load File (.xlsx)</Typography>
+            <div style={{ marginTop: '15px' }}>
+              <TextField width="155px" value={trainLoadFilename} disabled />
+              <Button color="normal" width="30px" onClick={() => fileInputRef.current?.click()}>
+                Browse
+              </Button>
+              <input
+                type="file"
+                style={{ display: 'none' }}
+                accept=".csv,.xlsx"
+                ref={fileInputRef}
+                onChange={handleFileSelect}
+              />
+            </div>
+            <Grid container direction="row">
+              <Grid item xs={4}>
+                <Typography marginTop={1} variant="body2">Rail Track Nodes</Typography>
+                <div style={{ marginTop: '10px' }}>
+                  <DropList
+                    itemList={availableGroups}
+                    width="220px"
+                    value={railTrackNode}
+                    onChange={(e) => setRailTrackNode(e.target.value)}
+                  />
+                </div>
+              </Grid>
+              <Grid item xs={4} marginLeft={10}>
+                <Typography marginTop={1} variant="body2">Acceleration Output Nodes</Typography>
+                <div style={{ marginTop: '10px' }}>
+                  <DropList
+                    itemList={availableGroups}
+                    width="220px"
+                    value={accelerationNode}
+                    onChange={(e) => setAccelerationNode(e.target.value)}
+                  />
+                </div>
+              </Grid>
+            </Grid>
+          </Panel>
+
+          <Panel flexItem justifyContent="center" width="499px" height="80px" variant="box" marginTop={1} >
+            <Button color="normal" width="auto"  onClick={handleRunAnalysis}>
+              Run Analysis
+            </Button>
+            <div style={{ marginLeft:"10px" }}>
+            <Button color="normal" width="auto" onClick={handleReset}>
+              Refresh
+            </Button>
+            </div>
+          </Panel>
+        </Panel>
+
+        {/* Right Column - Output (conditionally rendered) */}
+        {(excelData || chartData.length > 0) && (
+          <Grid container direction="column" spacing={1} style={{ width: '700px' }}>
             {excelData && (
               <Grid item>
-                <Panel width="680px" height="220px" variant="strock" marginTop={3}>
+                <Panel width="520px" height="190px" variant="strock">
                   <Typography variant="h1" color="primary" marginBottom={1}>Excel Preview</Typography>
-                  <div style={{ maxHeight: '180px', overflowY: 'auto' }}>
+                  <div style={{ maxHeight: '150px', overflowY: 'auto' }}>
                     <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                       <tbody>
                         {excelData.map((row, rowIndex) => (
@@ -577,33 +595,52 @@ return (
             )}
             {chartData.length > 0 && (
               <Grid item>
-                <Panel width="680px" height="280px" variant="strock" marginTop={0}>
-                  <Typography variant="h1" color="primary" marginBottom={0}>Speed vs Acceleration</Typography>
-                  <ChartLine 
-                    data={chartData}
-                    axisTop
-                    axisTopTickValues={5}
-                    axisTopDecimals={1}
-                    axisTopLegend="Speed (km/h)"
-                    axisRight
-                    axisRightTickValues={5}
-                    axisRightDecimals={2}
-                    axisRightLegend="Acceleration (m/s²)"
-                    width={600}
-                    height={300}
-                    pointSize={0}
-                    marginTop={60}
-                    marginRight={70}
-                    marginLeft={60}
-                    marginBottom={60}
-                  />
+                <Panel width="520px" height="248px" variant="strock">
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <Typography variant="h1" color="primary">Speed vs Acceleration</Typography>
+                    <ComponentsIconButtonExpand onClick={() => setIsGraphPopupOpen(true)} />
+                  </div>
+                  {/* Chart Container */}
+                  <div style={{ width: '100%', height: '220px', position: 'relative' }}>
+                    <ChartLine
+                      data={chartData}
+                      axisTop
+                      axisTopTickValues={5}
+                      axisTopDecimals={1}
+                      axisTopLegend="Speed (km/h)"
+                      axisRight
+                      axisRightTickValues={5}
+                      axisRightDecimals={2}
+                      axisRightLegend="Acceleration (m/s²)"
+                      width="100%"
+                      height="100%"
+                      pointSize={0}
+                      marginTop={60}
+                      marginRight={70}
+                      marginLeft={60}
+                      marginBottom={60}
+                    />
+                  </div>
                 </Panel>
               </Grid>
             )}
-          </Grid>   
-    </Grid>
-    </div>
-  );
+            <GraphPopupDialog
+              isOpen={isGraphPopupOpen}
+              setIsOpen={setIsGraphPopupOpen}
+              chartData={chartData}
+            />
+
+
+
+
+          </Grid>
+        )}
+      </div>
+    </Panel>
+  </div>
+)
+
+
 };
 export default App;
 
