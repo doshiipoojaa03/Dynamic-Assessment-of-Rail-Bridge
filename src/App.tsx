@@ -1,88 +1,55 @@
 import React, { useState, useEffect, useRef } from "react";
-import { Panel,Typography, TextField, Button, Scrollbars, Grid, ChartLine, IconButton } from "@midasit-dev/moaui"; 
-import { DropList, Dialog } from '@midasit-dev/moaui';
+import { Panel,Typography, TextField, Button, Grid, ChartLine } from "@midasit-dev/moaui"; 
+import { DropList, IconButton, Icon } from '@midasit-dev/moaui';
 import { midasAPI } from "./Function/Common";
-import  ComponentsTableBundle  from "./Function/ComponentsTableBundle";
-import { iterativeResponseSpectrum, runAnalysisWithInputsUI } from "./utils_pyscript";
+import { runAnalysisWithInputsUI } from "./utils_pyscript";
 import { mapi_key } from "./utils_pyscript";
-import { useSnackbar, SnackbarProvider } from "notistack";
+import { useSnackbar, SnackbarProvider,  closeSnackbar } from "notistack";
 import ComponentsIconAdd from "./Function/ComponentsIconAdd";
 import GraphPopupDialog from "./Components/GraphPopupDialog";
 import ComponentsIconButtonExpand from "./Components/ComponentsIconButtonExpand";
+import ComponentsIconButtonDownload from "./Components/ComponentsIconButtonDownload";
 import * as XLSX from 'xlsx';
-// import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
-// import { GuideBox, Alert } from "@midasit-dev/moaui";
-// import ComponentsAlertError from "./Function/ComponentsAlertError";
+import html2canvas from 'html2canvas';
 
-let globalStructureGroups: { [key: number]: string } = {};
-let globalBoundaryGroups: { [key: number]: string } = {};
-let globalRsLoadCases: { [key: number]: string } = {};
-interface Displacement {
-    Dx: number;
-    Dy: number;
-    Dz: number;
-}
-let globalkey: string = "";
-interface IterationResults {
-    [key: string]: Displacement;
-}
-
-interface Results {
-    [key: string]: IterationResults;
-}
-const App = () => {
-  const [structureGroups, setStructureGroups] = useState<Map<string, number>>(new Map());
-  const [boundaryGroups, setBoundaryGroups] = useState<Map<string, number>>(new Map());
-  const [rsLoadCases, setRsLoadCases] = useState<Map<string, number>>(new Map());
-  const [selectedStructureGroup, setSelectedStructureGroup] = useState("");
-  const [selectedBoundaryGroup, setSelectedBoundaryGroup] = useState("");
-  const [selectedRsLoadCase, setSelectedRsLoadCase] = useState("");
-  const [tolerance, setTolerance] = useState("0.01");
-  const [iterations, setIterations] = useState<Map<string, number>>(new Map());
-  const [results, setResults] = useState({});
-  const [selectedIteration, setSelectedIteration] = useState(null);
-  const [tableData, setTableData] = useState<{ [key: string]: Displacement }>({});
-  const [data, setData] = useState(null);
-  const { enqueueSnackbar } = useSnackbar();
-  const [csvData, setCsvData] = useState<string>("");
-  // Fetch data for dropdowns
-  const [triggerFetch, setTriggerFetch] = useState<boolean>(false);
-	
+const WrappedApp = () => {
 	// Rail Load API
-  const XLSX = require('xlsx');
+  const [trainLoadFile, setTrainLoadFile] = useState<File | null>(null);
+  const [trainLoadFilename, setTrainLoadFilename] = useState('');
+  const [excelData, setExcelData] = useState<number[][] | null>(null);
 
+  const XLSX = require('xlsx');
   const bridgeTypes = new Map([
     ["Steel and Composite", "Steel and Composite"],
     ["Prestressed Concrete", "Prestressed Concrete"],
     ["Filler Beam and Reinforced Concrete", "Filler Beam and Reinforced Concrete"],
     ["User defined", "User defined"]
   ]);
-
+  
   const [initialSpeed, setInitialSpeed] = useState<string>('60');
   const [finalSpeed, setFinalSpeed] = useState<string>('200');
   const [speedIncrement, setSpeedIncrement] = useState<string>('5');
   const [timeStepIncrement, setTimeStepIncrement] = useState<string>('0.0001');
-
-  const [bridgeType, setBridgeType] = useState<string>('');
+  
+  const [bridgeType, setBridgeType] = useState<string>('Steel and Composite');
   const [damping, setDamping] = useState<string>('');
   const [isDampingEnabled, setIsDampingEnabled] = useState<boolean>(false);
-
-  const [trainLoadFile, setTrainLoadFile] = useState<File | null>(null);
-  const [trainLoadFilename, setTrainLoadFilename] = useState<string>('');
-
+  
   const [railTrackNode, setRailTrackNode] = useState<string>('');
   const [accelerationNode, setAccelerationNode] = useState<string>('');
-  const [excelData, setExcelData] = useState<any[][] | null>(null);
   const [availableGroups, setAvailableGroups] = useState<Map<string, string>>(new Map());
-
-  const [chartData, setChartData] = useState<any[]>([]);
+  
+  type ChartDatum = { x: number; y: number };
+  type LineSeries = { id: string; color: string; data: ChartDatum[] };
+  
+  
+  const [chartData, setChartData] = useState<LineSeries[]>([]);
+  const [staticChartData, setStaticChartData] = useState<LineSeries[]>([]);
   const [isGraphPopupOpen, setIsGraphPopupOpen] = useState(false);
-
-
-  // const [imageUrl, setImageUrl] = useState<string | null>(null);
-
+  
   const fileInputRef = useRef<HTMLInputElement>(null);
-
+  
+  const { enqueueSnackbar } = useSnackbar();
   const handleBridgeTypeChange = (value: string) => {
     setBridgeType(value);
     setIsDampingEnabled(value === 'User defined');
@@ -90,25 +57,99 @@ const App = () => {
       setDamping('');
     }
   };
+  useEffect(() => {
+  const start = parseFloat(initialSpeed);
+  const end = parseFloat(finalSpeed);
+  const step = parseFloat(speedIncrement);
+
+  const staticSeries: LineSeries[] = [
+    {
+      id: "Speed vs Acceleration",
+      color: "#f47560",
+      data: [],
+    },
+  ];
+
+  for (let x = start; x <= end; x += step) {
+    staticSeries[0].data.push({ x, y: 0 });
+  }
+
+  setStaticChartData(staticSeries);
+}, []);
+
 
   const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (file) {
-      setTrainLoadFile(file);
-      setTrainLoadFilename(file.name);
+  const file = event.target.files?.[0];
 
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        const data = new Uint8Array(e.target?.result as ArrayBuffer);
-        const workbook = XLSX.read(data, { type: 'array' });
-        const sheetName = workbook.SheetNames[0];
-        const worksheet = workbook.Sheets[sheetName];
-        const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
-        setExcelData(jsonData);
-      };
-      reader.readAsArrayBuffer(file);
+  if (!file) {
+    enqueueSnackbar("No file selected. Please choose an Excel file.", {
+      variant: "error",
+      anchorOrigin: { vertical: "top", horizontal: "center" },
+      action: (key) => (
+  <IconButton onClick={() => closeSnackbar(key)}>
+    <Icon iconName="Close" />
+  </IconButton>
+)
+    });
+    return;
+  }
+
+  const validExtensions = [".xls", ".xlsx"];
+  if (!validExtensions.some(ext => file.name.toLowerCase().endsWith(ext))) {
+    enqueueSnackbar("Invalid file type. Please upload a .xls or .xlsx file.", {
+      variant: "error",
+      anchorOrigin: { vertical: "top", horizontal: "center" },
+    });
+    return;
+  }
+
+  setTrainLoadFile(file);
+  setTrainLoadFilename(file.name);
+
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    try {
+      const data = new Uint8Array(e.target?.result as ArrayBuffer);
+      const workbook = XLSX.read(data, { type: 'array' });
+      const sheetName = workbook.SheetNames[0];
+      const worksheet = workbook.Sheets[sheetName];
+      const jsonData: (number[])[] = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
+
+      if (!Array.isArray(jsonData) || jsonData.length === 0) {
+        throw new Error("Empty sheet");
+      }
+
+      for (let i = 0; i < jsonData.length; i++) {
+        const row = jsonData[i];
+        if (
+          !Array.isArray(row) ||
+          row.length !== 3 ||
+          row.some(cell => typeof cell !== 'number' || isNaN(cell))
+        ) {
+          enqueueSnackbar(`Row ${i + 1} must have exactly 3 numeric (non-empty) values.`, {
+            variant: 'error',
+            anchorOrigin: { vertical: 'top', horizontal: 'center' },
+          });
+          return;
+        }
+      }
+
+      setExcelData(jsonData);
+
+      enqueueSnackbar("Excel file loaded successfully!", {
+        variant: "success",
+        anchorOrigin: { vertical: "top", horizontal: "center" },
+      });
+    } catch (err) {
+      enqueueSnackbar("Error reading Excel file.", {
+        variant: "error",
+        anchorOrigin: { vertical: "top", horizontal: "center" },
+      });
     }
   };
+
+  reader.readAsArrayBuffer(file);
+};
 
   // To fetch Group Names
   useEffect(() => {
@@ -144,50 +185,121 @@ const App = () => {
 
 
 const handleRunAnalysis = async () => {
+  const errors: string[] = [];
+  const start = parseFloat(initialSpeed);
+  const end = parseFloat(finalSpeed);
+
+  const isPositiveFloat = (val: string) => !isNaN(Number(val)) && parseFloat(val) > 0;
+
+  // Gather all validation errors
+  if (!isPositiveFloat(initialSpeed)) {
+    errors.push("Initial Speed must be a positive number.");
+  }
+
+  if (!isPositiveFloat(finalSpeed) || end <= start) {
+    errors.push("Final Speed must be a positive number and greater than Initial Speed.");
+  }
+
+  if (!isPositiveFloat(speedIncrement)) {
+    errors.push("Speed Increment must be a positive number.");
+  }
+
+  if (!isPositiveFloat(timeStepIncrement)) {
+    errors.push("Time Step Increment must be a positive number.");
+  }
+
+  if (bridgeType === "User defined") {
+    const dampingValue = parseFloat(damping);
+    if (!isPositiveFloat(damping) || dampingValue >= 1) {
+      errors.push("Damping Ratio must be a positive number less than 1.");
+    }
+  }
+
   if (!trainLoadFile) {
-    alert("Please upload the train load Excel file.");
+    errors.push("Please upload the train load Excel file.");
+  }
+
+  // ❌ If there are any errors, show them all and stop
+  if (errors.length > 0) {
+    errors.forEach(msg =>
+      enqueueSnackbar(msg, {
+        variant: 'error',
+        anchorOrigin: { vertical: 'top', horizontal: 'center' },
+      })
+    );
     return;
   }
-  const globalkey = mapi_key
+
+  // ✅ Continue with analysis
+  enqueueSnackbar("Running analysis. Please wait...", {
+    variant: 'info',
+    anchorOrigin: { vertical: 'top', horizontal: 'center' },
+  });
+
+  const globalkey = mapi_key;
+
   try {
     const result = await runAnalysisWithInputsUI({
-      initial: parseInt(initialSpeed),
-      final: parseInt(finalSpeed),
-      step: parseInt(speedIncrement),
+      initial: start,
+      final: end,
+      step: parseFloat(speedIncrement),
       time_step: parseFloat(timeStepIncrement),
       bridge_type: bridgeType,
       damping_input: damping,
       track_group: railTrackNode,
       girder_group: accelerationNode,
-      file: trainLoadFile,
-      globalkey 
+      file: trainLoadFile as File,
+      globalkey,
     });
 
-   if (result.status === "completed") {
-  const lineData = [
-    {
-      id: "Speed vs Acceleration",
-      color: "#f47560",
-      data: result.points  // List of {x, y}
+    if (result.status === "completed" && Array.isArray(result.points)) {
+      const lineData: LineSeries[] = [
+        {
+          id: "Speed vs Acceleration",
+          color: "red",
+          data: result.points,
+        },
+      ];
+
+      setChartData(lineData);
+
+      enqueueSnackbar("Analysis completed successfully!", {
+        variant: 'success',
+        anchorOrigin: { vertical: 'top', horizontal: 'center' },
+      });
+    } else {
+      enqueueSnackbar("Analysis failed or returned no points.", {
+        variant: 'error',
+        anchorOrigin: { vertical: 'top', horizontal: 'center' },
+      });
     }
-  ];
-  setChartData(lineData);
-} else {
-  alert("Analysis failed.");
-};
-  }catch (err) {
+  } catch (err) {
     console.error("Analysis error:", err);
-    alert("Failed to run analysis. Check console for details.");
+    enqueueSnackbar("Failed to run analysis. Check console for details.", {
+      variant: 'error',
+      anchorOrigin: { vertical: 'top', horizontal: 'center' },
+    });
   }
 };
 
+  const hiddenChartRef = useRef<HTMLDivElement>(null);
+
+  const handleDownload = async () => {
+    if (hiddenChartRef.current) {
+      const canvas = await html2canvas(hiddenChartRef.current, { scale: 2 });
+      const link = document.createElement("a");
+      link.download = "speed_vs_acceleration.png";
+      link.href = canvas.toDataURL("image/png");
+      link.click();
+    }
+  };
 
   function handleReset() {
     setInitialSpeed('60');
     setFinalSpeed('200');
     setSpeedIncrement('5');
     setTimeStepIncrement('0.0001');
-    setBridgeType('');
+    setBridgeType('Steel and Composite');
     setDamping('');
     setIsDampingEnabled(false);
     setTrainLoadFile(null);
@@ -201,276 +313,50 @@ const handleRunAnalysis = async () => {
     fileInputRef.current.value = '';
   }
   
- 
-  const resetAndFetchData = () => {
-	  // Reset state variables
-	//   setStructureGroups(new Map());
-	  setBoundaryGroups(new Map());
-	  setRsLoadCases(new Map());
-	  setIterations(new Map());
-	  setSelectedIteration(null);
-	  setResults({});
-	  setTableData({});
-	  setCsvData("");
-	  // Trigger fetch
-	  setTriggerFetch(prev => !prev);
-  };
-  useEffect(() => {
-    const fetchData = async () => {
-      try {
-        // const structureResponse = await midasAPI("GET","/db/GRUP",{});
-        const boundaryResponse = await midasAPI("GET","/db/BNGR",{});
-        const rsLoadCaseResponse = await midasAPI("GET","/db/SPLC",{});
-		// const grupData = structureResponse.GRUP;
-        const bngData = boundaryResponse.BNGR;
-		const splcData = rsLoadCaseResponse.SPLC;
-        // const mappedItems = new Map<string, number>(
-		// // 	Object.keys(grupData).map((key) => {
-		// // 	  const group = grupData[key];
-		// // 	  return [group.NAME, parseInt(key)];  // You can adjust this as needed
-		// // 	})
-		// //   );
-		  const mappedItems_bng = new Map<string, number>(
-			Object.keys(bngData).map((key) => {
-			  const group = bngData[key];
-			  return [group.NAME, parseInt(key)];  // You can adjust this as needed
-			})
-		  );
-		  const mappedItems_splc = new Map<string, number>(
-			Object.keys(splcData).map((key) => {
-			  const group = splcData[key];
-			  return [group.NAME, parseInt(key)];  // You can adjust this as needed
-			})
-		  );
-		//  globalStructureGroups = Object.keys(grupData).reduce((acc, key) => {
-        //   acc[parseInt(key)] = grupData[key].NAME;
-        //   return acc;
-        // }, {} as { [key: number]: string });
-
-        globalBoundaryGroups = Object.keys(bngData).reduce((acc, key) => {
-          acc[parseInt(key)] = bngData[key].NAME;
-          return acc;
-        }, {} as { [key: number]: string });
-
-        globalRsLoadCases = Object.keys(splcData).reduce((acc, key) => {
-          acc[parseInt(key)] = splcData[key].NAME;
-          return acc;
-        }, {} as { [key: number]: string });
-        // setStructureGroups(mappedItems);
-        setBoundaryGroups(mappedItems_bng);   
-        setRsLoadCases(mappedItems_splc);
-      } catch (error) {
-        console.error("Error fetching data:", error);
-      }
-    };
-    fetchData();
-  }, [triggerFetch]);    
-  
- 
-  // Update table when iteration changes
-  useEffect(() => {
-	if (selectedIteration && results[selectedIteration]) {
-		const formattedData = Object.keys(results[selectedIteration]).reduce((acc: { [key: string]: Displacement }, key) => {
-			const displacement = results[selectedIteration][key] as Displacement;
-			acc[key] = {
-				Dx: displacement.Dx !== undefined ? parseFloat(displacement.Dx.toFixed(4)) : 0,
-				Dy: displacement.Dy !== undefined ? parseFloat(displacement.Dy.toFixed(4)) : 0,
-				Dz: displacement.Dz !== undefined ? parseFloat(displacement.Dz.toFixed(4)) : 0,
-			};
-			return acc;
-		}, {} as { [key: string]: Displacement });
-
-		setTableData(formattedData);
-
-		// Convert formattedData to CSV string
-		const csvRows = [
-			["Key", "Dx", "Dy", "Dz"], // Header row
-			...Object.entries(formattedData).map(([key, displacement]) => [
-				key,
-				displacement.Dx,
-				displacement.Dy,
-				displacement.Dz,
-			]),
-		];
-
-		const csvString = csvRows.map(row => row.join("\t")).join("\n");
-		setCsvData(csvString);
-	}
-}, 
-
-// const handleRunAnalysis = async () => {
-//     try {
-// 		if (!selectedBoundaryGroup && !selectedRsLoadCase) {
-// 			enqueueSnackbar("Please select the required boundary group and Load Case before running the analysis.", {
-// 				variant: "error",
-// 				anchorOrigin: { vertical: "top", horizontal: "center" },
-// 			});
-// 			return;
-// 		}	
-// 		// if (!selectedStructureGroup && !selectedBoundaryGroup) {
-// 		// 	enqueueSnackbar("Please select the required groups before running the analysis.", {
-// 		// 		variant: "error",
-// 		// 		anchorOrigin: { vertical: "top", horizontal: "center" },
-// 		// 	});
-// 		// 	return;
-// 		// }
-// 		// if (!selectedStructureGroup) {
-// 		// 	enqueueSnackbar("Please select the required Structure Group before running the analysis.", {
-// 		// 		variant: "error",
-// 		// 		anchorOrigin: { vertical: "top", horizontal: "center" },
-// 		// 	});
-// 		// 	return;
-// 		// }
-// 		if (!selectedBoundaryGroup) {
-// 			enqueueSnackbar("Please select the required Boundary Group before running the analysis.", {
-// 				variant: "error",
-// 				anchorOrigin: { vertical: "top", horizontal: "center" },
-// 			});
-// 			return;
-// 		}	
-// 		if (!selectedRsLoadCase) {
-// 			enqueueSnackbar("Please select the required Load Case before running the analysis.", {
-// 				variant: "error",
-// 				anchorOrigin: { vertical: "top", horizontal: "center" },
-// 			});
-// 			return;
-// 		}	
-// 		if (tolerance === '' || isNaN(parseFloat(tolerance))) {
-// 			enqueueSnackbar("Please enter a valid tolerance value.", {
-// 				variant: "error",
-// 				anchorOrigin: { vertical: "top", horizontal: "center" },
-// 			});
-// 			return;
-// 		}
-// 		enqueueSnackbar("Please wait while running analysis...", {
-// 			variant: "info",
-// 			anchorOrigin: { vertical: "top", horizontal: "center" },
-// 		  });
-// 		  setTimeout(async () => {
-//             console.log(
-//                 globalStructureGroups[parseInt(selectedStructureGroup)],
-//                 globalBoundaryGroups[parseInt(selectedBoundaryGroup)],
-//                 globalRsLoadCases[parseInt(selectedRsLoadCase)],
-//                 tolerance
-//             );
-//             globalkey = mapi_key;
-
-//             try {
-//                 const result = await iterativeResponseSpectrum(
-//                     globalBoundaryGroups[parseInt(selectedBoundaryGroup)],
-//                     globalRsLoadCases[parseInt(selectedRsLoadCase)],
-//                     parseFloat(tolerance),
-//                     globalkey
-//                 );
-//                 console.log("Analysis results:", result);
-//                 setResults(result);
-//                 const mappedIterations = new Map<string, number>(
-//                     Object.keys(result).map((key) => {
-//                         return [key, parseInt(key)];  // Adjust as needed
-//                     })
-//                 );
-//                 setIterations(mappedIterations);
-//                 console.log("Mapped iterations:", mappedIterations);
-//                 console.log("Analysis results:", result);
-//                 enqueueSnackbar("Analysis completed successfully!", {
-//                     variant: "success",
-//                     anchorOrigin: { vertical: "top", horizontal: "center" },
-//                 });
-//             } catch (error) {
-//                 enqueueSnackbar("Error while running analysis!", {
-//                     variant: "error",
-//                     anchorOrigin: { vertical: "top", horizontal: "center" },
-//                 });
-//                 console.error("Error running analysis:", error);
-//             }
-//         }, 0);
-//     } catch (error) {
-// 		enqueueSnackbar("Error while running analysis!", {
-// 			variant: "error",
-// 			anchorOrigin: { vertical: "top", horizontal: "center" },
-// 		  })
-//       console.error("Error running analysis:", error);
-//     }
-//   };
-//   const handleDownload = () => {
-// 	// Process the downloaded Excel file
-// 	if (Object.keys(results).length === 0) {
-// 		enqueueSnackbar("Please run analysis first.", {
-// 			variant: "warning",
-// 			anchorOrigin: { vertical: "top", horizontal: "center" },
-// 		});
-// 		return;
-// 	}
-// 	// const workbook = XLSX.utils.book_new();
-//     // const worksheetData = [["Key", "Dx", "Dy", "Dz"]]; // Header row
-
-// 	// Object.keys(results).forEach(iteration => {
-//     //     const iterationResults = results[iteration];
-//     //     Object.keys(iterationResults).forEach(key => {
-//     //         const displacement = iterationResults[key];
-//     //         worksheetData.push([
-//     //             key,
-//     //             displacement.Dx !== undefined ? displacement.Dx : 0,
-//     //             displacement.Dy !== undefined ? displacement.Dy : 0,
-//     //             displacement.Dz !== undefined ? displacement.Dz : 0,
-//     //         ]);
-//     //     });
-//     // });
-
-//     // const worksheet = XLSX.utils.aoa_to_sheet(worksheetData);
-//     // XLSX.utils.book_append_sheet(workbook, worksheet, "Results");
-
-// 	// 	// Generate the modified Excel file and create a Blob object
-// 	// 	const excelBuffer = XLSX.write(workbook, { bookType: 'xlsx', type: 'array' });
-// 	// 	const modifiedBlob = new Blob([excelBuffer], { type: 'application/octet-stream' });
-
-// 	// 	// Trigger the download of the modified Excel file
-// 	// 	const link = document.createElement('a');
-// 	// 	link.href = URL.createObjectURL(modifiedBlob);
-// 	// 	link.download = 'Iterations_result.xlsx';
-// 	// 	document.body.appendChild(link);
-// 	// 	link.click();
-// 	// 	document.body.removeChild(link);
-// };
-  )
-  
 return (
-  <div style={{ display: 'flex', justifyContent: 'center', width: 'auto' }}>
-    <Panel
-      width="auto"
-      height="auto"
-      marginTop={3}
-      style={{
-        display: 'flex',
-        flexDirection: 'column',
-        maxWidth: '1010px', // optional: to limit width on large screens
-        margin: '0 auto'    // center the panel horizontally
-      }}
-    >
-
+        <div style={{ display: 'flex', justifyContent: 'center', width: '100%' }}>
+          <Panel
+            width="fit-content"
+            height="auto"
+            marginTop={3}
+            style={{
+              display: 'flex',
+              flexDirection: 'column',
+              margin: '0 auto',
+              padding: '20px',
+            }}
+          >
       {/* Panel Header */}
       <Panel width="100%" height="50px" variant="box">
         <Typography variant="h1" color="primary" center size="large">
-          MIDAS Train Load API
+          Dynamic Analysis of Rail Bridge
         </Typography>
       </Panel>
 
       {/* Body Content */}
-      <div style={{ display: 'flex', flexDirection: 'row', gap: '20px', padding: '10px' }}>
+      <div
+      style={{
+        display: 'flex',
+        flexWrap: 'wrap', 
+        flexDirection: 'row',
+        gap: '20px',
+        padding: '10px',
+      }}
+    >
         {/* Left Column - Form */}
-        <Panel width="520px" height="445px">
-          <Panel width="499px" height="130px" variant="strock" marginTop={0}>
+        <Panel width="480px" height="445px">
+          <Panel width="460px" height="130px" variant="strock" marginTop={0}>
             <Grid container direction="row">
               <Grid item xs={4}>
                 <Typography marginTop={0} variant="body2">Initial Speed (kmph)</Typography>
                 <div style={{ marginTop: '10px' }}>
-                  <TextField width="220px" value={initialSpeed} onChange={(e) => setInitialSpeed(e.target.value)} />
+                  <TextField width="190px" value={initialSpeed} onChange={(e) => setInitialSpeed(e.target.value)} />
                 </div>
               </Grid>
               <Grid item xs={4} marginLeft={10}>
                 <Typography marginTop={0} variant="body2">Final Speed (kmph)</Typography>
                 <div style={{ marginTop: '10px' }}>
-                  <TextField width="220px" value={finalSpeed} onChange={(e) => setFinalSpeed(e.target.value)} />
+                  <TextField width="190px" value={finalSpeed} onChange={(e) => setFinalSpeed(e.target.value)} />
                 </div>
               </Grid>
             </Grid>
@@ -478,50 +364,60 @@ return (
               <Grid item xs={4}>
                 <Typography marginTop={1} variant="body2">Speed Increment (kmph)</Typography>
                 <div style={{ marginTop: '10px' }}>
-                  <TextField width="220px" value={speedIncrement} onChange={(e) => setSpeedIncrement(e.target.value)} />
+                  <TextField width="190px" value={speedIncrement} onChange={(e) => setSpeedIncrement(e.target.value)} />
                 </div>
               </Grid>
               <Grid item xs={4} marginLeft={10}>
                 <Typography marginTop={1} variant="body2">Time Step Increment (sec)</Typography>
                 <div style={{ marginTop: '10px' }}>
-                  <TextField width="220px" value={timeStepIncrement} onChange={(e) => setTimeStepIncrement(e.target.value)} />
+                  <TextField width="190px" value={timeStepIncrement} onChange={(e) => setTimeStepIncrement(e.target.value)} />
                 </div>
               </Grid>
             </Grid>
           </Panel>
 
-          <Panel width="499px" height="80px" variant="strock" marginTop={1}>
+          <Panel width="460px" height="70px" variant="strock" marginTop={1}>
             <Grid container direction="row">
               <Grid item xs={4}>
-                <Typography marginTop={1} variant="body2">Bridge Type for Damping</Typography>
+                <Typography marginTop={0} variant="body2">Bridge Type for Damping</Typography>
                 <div style={{ marginTop: '10px' }}>
                   <DropList
                     itemList={bridgeTypes}
-                    width="220px"
+                    width="190px"
                     value={bridgeType}
                     onChange={(e) => handleBridgeTypeChange(e.target.value)}
                   />
                 </div>
               </Grid>
               <Grid item xs={4} marginLeft={10}>
-                <Typography marginTop={1} variant="body2">Percentage Damping</Typography>
+                <Typography marginTop={0} variant="body2">Damping Ratio</Typography>
                 <div style={{ marginTop: '10px' }}>
+                {bridgeType === "User defined" ? (
                   <TextField
-                    width="220px"
+                    width="190px"
                     value={damping}
                     onChange={(e) => setDamping(e.target.value)}
-                    disabled={!isDampingEnabled}
+                    placeholder="Enter value < 1"
                   />
-                </div>
+                ) : (
+                  <TextField
+                    width="190px"
+                    value={damping}
+                    onChange={() => {}}
+                    disabled
+                    placeholder="Disabled"
+                  />
+                )}
+              </div>
               </Grid>
             </Grid>
           </Panel>
 
-          <Panel width="499px" height="150px" variant="strock" marginTop={1}>
-            <Typography marginTop={1} variant="body2">Train Load File (.xlsx)</Typography>
+          <Panel width="460px" height="150px" variant="strock" marginTop={1}>
+            <Typography marginTop={0} variant="body2">Train Load File (.xlsx)</Typography>
             <div style={{ marginTop: '15px' }}>
-              <TextField width="155px" value={trainLoadFilename} disabled />
-              <Button color="normal" width="30px" onClick={() => fileInputRef.current?.click()}>
+              <TextField width="127px" value={trainLoadFilename} disabled />
+              <Button color="normal" width="20px" onClick={() => fileInputRef.current?.click()}>
                 Browse
               </Button>
               <input
@@ -534,11 +430,11 @@ return (
             </div>
             <Grid container direction="row">
               <Grid item xs={4}>
-                <Typography marginTop={1} variant="body2">Rail Track Nodes</Typography>
-                <div style={{ marginTop: '10px' }}>
+                <Typography marginTop={2} variant="body2">Rail Track Nodes</Typography>
+                <div style={{ marginTop: '16px' }}>
                   <DropList
                     itemList={availableGroups}
-                    width="220px"
+                    width="190px"
                     value={railTrackNode}
                     onChange={(e) => setRailTrackNode(e.target.value)}
                   />
@@ -549,7 +445,7 @@ return (
                 <div style={{ marginTop: '10px' }}>
                   <DropList
                     itemList={availableGroups}
-                    width="220px"
+                    width="190px"
                     value={accelerationNode}
                     onChange={(e) => setAccelerationNode(e.target.value)}
                   />
@@ -558,7 +454,7 @@ return (
             </Grid>
           </Panel>
 
-          <Panel flexItem justifyContent="center" width="499px" height="80px" variant="box" marginTop={1} >
+          <Panel flexItem justifyContent="center" width="450px" height="80px" variant="box" marginTop={1} >
             <Button color="normal" width="auto"  onClick={handleRunAnalysis}>
               Run Analysis
             </Button>
@@ -570,92 +466,169 @@ return (
           </Panel>
         </Panel>
 
-        {/* Right Column - Output (conditionally rendered) */}
-        {(excelData || chartData.length > 0) && (
-          <Grid container direction="column" spacing={1} style={{ width: '700px' }}>
-            {excelData && (
-              <Grid item>
-                <Panel width="520px" height="190px" variant="strock">
-                  <Typography variant="h1" color="primary" marginBottom={1}>Excel Preview</Typography>
-                  <div style={{ maxHeight: '150px', overflowY: 'auto' }}>
-                    <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-                      <tbody>
-                        {excelData.map((row, rowIndex) => (
-                          <tr key={rowIndex}>
-                            {row.map((cell, cellIndex) => (
-                              <td key={cellIndex} style={{ border: '1px solid #ccc', padding: '5px' }}>{cell}</td>
-                            ))}
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </Panel>
-              </Grid>
-            )}
-            {chartData.length > 0 && (
-              <Grid item>
-                <Panel width="520px" height="248px" variant="strock">
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <Typography variant="h1" color="primary">Speed vs Acceleration</Typography>
-                    <ComponentsIconButtonExpand onClick={() => setIsGraphPopupOpen(true)} />
-                  </div>
-                  {/* Chart Container */}
-                  <div style={{ width: '100%', height: '220px', position: 'relative' }}>
-                    <ChartLine
-                      data={chartData}
-                      axisTop
-                      axisTopTickValues={5}
-                      axisTopDecimals={1}
-                      axisTopLegend="Speed (km/h)"
-                      axisRight
-                      axisRightTickValues={5}
-                      axisRightDecimals={2}
-                      axisRightLegend="Acceleration (m/s²)"
-                      width="100%"
-                      height="100%"
-                      pointSize={0}
-                      marginTop={60}
-                      marginRight={70}
-                      marginLeft={60}
-                      marginBottom={60}
-                    />
-                  </div>
-                </Panel>
-              </Grid>
-            )}
-            <GraphPopupDialog
-              isOpen={isGraphPopupOpen}
-              setIsOpen={setIsGraphPopupOpen}
-              chartData={chartData}
-            />
-
-
-
-
-          </Grid>
+        {/* Right Column - Always Rendered Panel */}
+<Grid container direction="column" spacing={1} style={{ width: 'auto', maxWidth: '100%' }}>
+  <Grid item>
+  <Panel width="480px" height="190px" variant="strock" style={{ overflowX: 'auto' }}>
+    <Typography variant="h1" color="primary" marginBottom={1}>
+      Train Load
+    </Typography>
+    <div style={{ maxHeight: '150px', overflowY: 'auto' }}>
+      <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+        {excelData && (
+          <thead>
+            <tr>
+              <th style={{ border: '1px solid #ccc', padding: '5px', backgroundColor: '#f0f0f0' }}>
+                Sr no.
+              </th>
+              <th style={{ border: '1px solid #ccc', padding: '5px', backgroundColor: '#f0f0f0' }}>
+                Axel Spacing (m)
+              </th>
+              <th style={{ border: '1px solid #ccc', padding: '5px', backgroundColor: '#f0f0f0' }}>
+                Axel Load (kN)
+              </th>
+            </tr>
+          </thead>
         )}
+        <tbody>
+          {excelData ? (
+            excelData.map((row, rowIndex) => {
+              const rowData = row.slice(0, 3);
+              const rowInvalid = rowData.some(cell => cell === null || cell === undefined || Number.isNaN(cell));
+              return (
+                <tr
+                  key={rowIndex}
+                  style={{
+                    backgroundColor: rowInvalid ? '#ffe5e5' : 'inherit',
+                    color: rowInvalid ? '#d8000c' : 'inherit',
+                  }}
+                >
+                  {rowData.map((cell, cellIndex) => (
+                    <td
+                      key={cellIndex}
+                      style={{
+                        border: '1px solid #ccc',
+                        padding: '5px',
+                      }}
+                    >
+                      {cell !== null && cell !== undefined && !Number.isNaN(cell) ? cell : 'N/A'}
+                    </td>
+                  ))}
+                </tr>
+              );
+            })
+          ) : (
+            <tr>
+              <td colSpan={3} style={{ padding: '5px', color: '#999' }}>
+                No train load data uploaded.
+              </td>
+            </tr>
+          )}
+        </tbody>
+      </table>
+    </div>
+  </Panel>
+</Grid>
+
+  {/* Output Chart Panel */}
+  <Grid item>
+    <Panel width="480px" height="248px" variant="strock" style={{ overflowX: 'auto' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <Typography variant="h1" color="primary">Speed vs Acceleration</Typography>
+        <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center'}}>
+          <ComponentsIconButtonDownload onClick={handleDownload} />
+          <ComponentsIconButtonExpand onClick={() => setIsGraphPopupOpen(true)} />
+        </div>
+      </div>
+      <div style={{ width: '100%', height: '220px', position: 'relative' }}>
+        <ChartLine
+          data={chartData.length > 0 ? chartData : staticChartData}
+          axisBottom
+          axisBottomTickValues={5}
+          axisBottomDecimals={1}
+          axisBottomLegend="Speed (km/h)"
+          axisLeft
+          axisLeftTickValues={5}
+          axisLeftDecimals={2}
+          axisLeftLegend="Acceleration (m/s²)"
+          width="100%"
+          height="100%"
+          pointSize={0}
+          marginTop={20}
+          marginRight={70}
+          marginLeft={60}
+          marginBottom={60}
+        />
+
+      </div>
+    </Panel>
+  </Grid>
+  <div style={{ position: 'absolute', left: '-9999px', top: '-9999px' }}>
+        <div ref={hiddenChartRef}>
+          <ChartLine
+            data={chartData.length > 0 ? chartData : staticChartData}
+            axisBottom
+            axisBottomTickValues={5}
+            axisBottomDecimals={1}
+            axisBottomLegend="Speed (km/h)"
+            axisLeft
+            axisLeftTickValues={5}
+            axisLeftDecimals={2}
+            axisLeftLegend="Acceleration (m/s²)"
+            width={950}
+            height={500}
+            pointSize={0}
+            marginTop={20}
+            marginRight={70}
+            marginLeft={60}
+            marginBottom={60}
+          />
+        </div>
+      </div>
+<GraphPopupDialog
+  isOpen={isGraphPopupOpen}
+  setIsOpen={setIsGraphPopupOpen}
+  chartData={chartData.length > 0 ? chartData : staticChartData}
+/>
+
+
+
+</Grid>
+
       </div>
     </Panel>
   </div>
-)
-
-
+);
 };
+
+
+
+const App = () =>(
+<SnackbarProvider
+  maxSnack={5}
+  autoHideDuration={null}
+  hideIconVariant
+  anchorOrigin={{ vertical: 'top', horizontal: 'center' }}
+   action={(snackbarId) => (
+        <button
+          onClick={() => closeSnackbar(snackbarId)}
+          style={{
+            background: 'none',
+            border: 'none',
+            color: '#fff',
+            fontSize: '16px',
+            fontWeight: 'bold',
+            marginLeft: '12px',
+            cursor: 'pointer',
+          }}
+        >
+          ×
+        </button>
+      )}
+
+>
+  <WrappedApp />
+</SnackbarProvider>
+
+);
 export default App;
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-        

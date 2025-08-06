@@ -1,14 +1,38 @@
 import React from 'react';
-import { Dialog, Typography, IconButton, Icon, ChartLine } from "@midasit-dev/moaui";
+import {
+  Dialog,
+  Typography,
+  ChartLine,
+} from "@midasit-dev/moaui";
+// import html2canvas from 'html2canvas';
 
-// ✅ Define prop types explicitly
+type ChartDatum = { x: number; y: number };
+type LineSeries = { id: string; color: string; data: ChartDatum[] };
+
 interface GraphPopupDialogProps {
   isOpen: boolean;
   setIsOpen: React.Dispatch<React.SetStateAction<boolean>>;
-  chartData: any[]; // Replace `any[]` with exact type if known
+  chartData: LineSeries[];
 }
 
-const GraphPopupDialog: React.FC<GraphPopupDialogProps> = ({ isOpen, setIsOpen, chartData }) => {
+const GraphPopupDialog: React.FC<GraphPopupDialogProps> = ({
+  isOpen,
+  setIsOpen,
+  chartData,
+}) => {
+  const combinedData: LineSeries[] = [...chartData];
+
+  // const handleDownload = async () => {
+  //   const chartElement = document.querySelector('.chart-line') as HTMLElement;
+  //   if (chartElement) {
+  //     const canvas = await html2canvas(chartElement, { scale: 2 });
+  //     const link = document.createElement('a');
+  //     link.download = 'speed_vs_acceleration.png';
+  //     link.href = canvas.toDataURL('image/png');
+  //     link.click();
+  //   }
+  // };
+
   return (
     <Dialog open={isOpen} setOpen={setIsOpen}>
       <div
@@ -21,7 +45,7 @@ const GraphPopupDialog: React.FC<GraphPopupDialogProps> = ({ isOpen, setIsOpen, 
           borderRadius: '8px',
         }}
       >
-        {/* Header with title and working close button */}
+        {/* Header */}
         <div
           style={{
             display: 'flex',
@@ -33,28 +57,31 @@ const GraphPopupDialog: React.FC<GraphPopupDialogProps> = ({ isOpen, setIsOpen, 
           <Typography variant="h1" color="primary">
             Speed vs Acceleration
           </Typography>
-
-          {/* ✅ Supported IconButton syntax */}
-          {/* <IconButton onClick={() => setIsOpen(false)}>
-            <Icon iconName="Close" />
-          </IconButton> */}
+          <div>
+            {/* <IconButton onClick={() => setIsOpen(false)}>
+              <Icon iconName="Close" />
+            </IconButton>
+            <IconButton onClick={handleDownload}>
+              <Icon iconName="Download" />
+            </IconButton> */}
+          </div>
         </div>
 
-        {/* Chart section */}
+        {/* Combined Chart */}
         <ChartLine
           data={chartData}
-          axisTop
-          axisTopTickValues={5}
-          axisTopDecimals={1}
-          axisTopLegend="Speed (km/h)"
-          axisRight
-          axisRightTickValues={5}
-          axisRightDecimals={2}
-          axisRightLegend="Acceleration (m/s²)"
-          width={960}
+          axisBottom
+          axisBottomTickValues={5}
+          axisBottomDecimals={1}
+          axisBottomLegend="Speed (km/h)"
+          axisLeft
+          axisLeftTickValues={5}
+          axisLeftDecimals={2}
+          axisLeftLegend="Acceleration (m/s²)"
+          width={950}
           height={500}
           pointSize={0}
-          marginTop={60}
+          marginTop={20}
           marginRight={70}
           marginLeft={60}
           marginBottom={60}
