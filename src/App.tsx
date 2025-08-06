@@ -5,7 +5,6 @@ import { midasAPI } from "./Function/Common";
 import { runAnalysisWithInputsUI } from "./utils_pyscript";
 import { mapi_key } from "./utils_pyscript";
 import { useSnackbar, SnackbarProvider,  closeSnackbar } from "notistack";
-import ComponentsIconAdd from "./Function/ComponentsIconAdd";
 import GraphPopupDialog from "./Components/GraphPopupDialog";
 import ComponentsIconButtonExpand from "./Components/ComponentsIconButtonExpand";
 import ComponentsIconButtonDownload from "./Components/ComponentsIconButtonDownload";
@@ -314,7 +313,16 @@ const handleRunAnalysis = async () => {
   }
   
 return (
-        <div style={{ display: 'flex', justifyContent: 'center', width: '100%' }}>
+        <div
+    style={{
+      maxWidth: '1400px',
+      width: '100%',
+      display: 'flex',
+      flexDirection: 'row',
+      gap: '20px',
+    }}
+  >
+    {/* <Panel width="1040px" height="690px">   */}
           <Panel
             width="fit-content"
             height="auto"
@@ -596,7 +604,8 @@ return (
 </Grid>
 
       </div>
-    </Panel>
+          </Panel>
+    {/* </Panel> */}
   </div>
 );
 };
@@ -625,10 +634,8 @@ const App = () =>(
           ×
         </button>
       )}
-
 >
   <WrappedApp />
 </SnackbarProvider>
-
 );
 export default App;
