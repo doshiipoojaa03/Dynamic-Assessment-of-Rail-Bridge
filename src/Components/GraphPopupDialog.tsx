@@ -34,15 +34,19 @@ const GraphPopupDialog: React.FC<GraphPopupDialogProps> = ({
   // };
 
   return (
-    <Dialog open={isOpen} setOpen={setIsOpen}>
+    <Dialog open={isOpen} setOpen={setIsOpen}> 
       <div
         style={{
-          width: '1000px',
+          width: '975px',
+          height:'450px',
           backgroundColor: '#fff',
           padding: '20px',
           display: 'flex',
           flexDirection: 'column',
           borderRadius: '8px',
+          alignItems:'center'
+          // overflow:'hidden',
+        
         }}
       >
         {/* Header */}
@@ -51,20 +55,21 @@ const GraphPopupDialog: React.FC<GraphPopupDialogProps> = ({
             display: 'flex',
             justifyContent: 'space-between',
             alignItems: 'center',
-            marginBottom: '16px',
+            marginBottom: '10px',
+            marginTop:'0px'
           }}
         >
-          <Typography variant="h1" color="primary">
+          <Typography variant="h1" color="primary" size='medium'>
             Speed vs Acceleration
           </Typography>
-          <div>
+          {/* <div>
             {/* <IconButton onClick={() => setIsOpen(false)}>
               <Icon iconName="Close" />
             </IconButton>
             <IconButton onClick={handleDownload}>
               <Icon iconName="Download" />
             </IconButton> */}
-          </div>
+          {/* </div> */} 
         </div>
 
         {/* Combined Chart */}
@@ -79,11 +84,11 @@ const GraphPopupDialog: React.FC<GraphPopupDialogProps> = ({
           axisLeftDecimals={2}
           axisLeftLegend="Acceleration (m/s²)"
           width={950}
-          height={500}
+          height={450}
           pointSize={0}
           marginTop={20}
-          marginRight={70}
-          marginLeft={60}
+          marginRight={30}
+          marginLeft={50}
           marginBottom={60}
         />
       </div>

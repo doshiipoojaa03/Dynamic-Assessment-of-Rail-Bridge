@@ -313,16 +313,21 @@ const handleRunAnalysis = async () => {
   }
   
 return (
-        <div
+        <Panel variant="box"
     style={{
-      maxWidth: '1400px',
-      width: '100%',
+      maxWidth: '1450px',
+      width: '1400px',
       display: 'flex',
-      flexDirection: 'row',
+      flexDirection: 'column',
+      alignItems:'center',
+      alignContent:'flex-start',
+      flexWrap:'wrap',
       gap: '20px',
+      padding:'0',
+
     }}
   >
-    {/* <Panel width="1040px" height="690px">   */}
+    
           <Panel
             width="fit-content"
             height="auto"
@@ -332,6 +337,8 @@ return (
               flexDirection: 'column',
               margin: '0 auto',
               padding: '20px',
+              alignItems:'center',
+              justifyContent:'center'
             }}
           >
       {/* Panel Header */}
@@ -348,7 +355,7 @@ return (
         flexWrap: 'wrap', 
         flexDirection: 'row',
         gap: '20px',
-        padding: '10px',
+        padding: '0px',
       }}
     >
         {/* Left Column - Form */}
@@ -475,138 +482,138 @@ return (
         </Panel>
 
         {/* Right Column - Always Rendered Panel */}
-<Grid container direction="column" spacing={1} style={{ width: 'auto', maxWidth: '100%' }}>
-  <Grid item>
-  <Panel width="480px" height="190px" variant="strock" style={{ overflowX: 'auto' }}>
-    <Typography variant="h1" color="primary" marginBottom={1}>
-      Train Load
-    </Typography>
-    <div style={{ maxHeight: '150px', overflowY: 'auto' }}>
-      <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-        {excelData && (
-          <thead>
-            <tr>
-              <th style={{ border: '1px solid #ccc', padding: '5px', backgroundColor: '#f0f0f0' }}>
-                Sr no.
-              </th>
-              <th style={{ border: '1px solid #ccc', padding: '5px', backgroundColor: '#f0f0f0' }}>
-                Axel Spacing (m)
-              </th>
-              <th style={{ border: '1px solid #ccc', padding: '5px', backgroundColor: '#f0f0f0' }}>
-                Axel Load (kN)
-              </th>
-            </tr>
-          </thead>
-        )}
-        <tbody>
-          {excelData ? (
-            excelData.map((row, rowIndex) => {
-              const rowData = row.slice(0, 3);
-              const rowInvalid = rowData.some(cell => cell === null || cell === undefined || Number.isNaN(cell));
-              return (
-                <tr
-                  key={rowIndex}
-                  style={{
-                    backgroundColor: rowInvalid ? '#ffe5e5' : 'inherit',
-                    color: rowInvalid ? '#d8000c' : 'inherit',
-                  }}
-                >
-                  {rowData.map((cell, cellIndex) => (
-                    <td
-                      key={cellIndex}
-                      style={{
-                        border: '1px solid #ccc',
-                        padding: '5px',
-                      }}
-                    >
-                      {cell !== null && cell !== undefined && !Number.isNaN(cell) ? cell : 'N/A'}
+      <Grid container direction="column" spacing={1} style={{ width: 'auto', maxWidth: '100%' }}>
+        <Grid item>
+        <Panel width="480px" height="190px" variant="strock" style={{ overflowX: 'auto' }}>
+          <Typography variant="h1" color="primary" marginBottom={1}>
+            Train Load
+          </Typography>
+          <div style={{ maxHeight: '150px', overflowY: 'auto' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+              {excelData && (
+                <thead>
+                  <tr>
+                    <th style={{ border: '1px solid #ccc', padding: '5px', backgroundColor: '#f0f0f0' }}>
+                      Sr no.
+                    </th>
+                    <th style={{ border: '1px solid #ccc', padding: '5px', backgroundColor: '#f0f0f0' }}>
+                      Axel Spacing (m)
+                    </th>
+                    <th style={{ border: '1px solid #ccc', padding: '5px', backgroundColor: '#f0f0f0' }}>
+                      Axel Load (kN)
+                    </th>
+                  </tr>
+                </thead>
+              )}
+              <tbody>
+                {excelData ? (
+                  excelData.map((row, rowIndex) => {
+                    const rowData = row.slice(0, 3);
+                    const rowInvalid = rowData.some(cell => cell === null || cell === undefined || Number.isNaN(cell));
+                    return (
+                      <tr
+                        key={rowIndex}
+                        style={{
+                          backgroundColor: rowInvalid ? '#ffe5e5' : 'inherit',
+                          color: rowInvalid ? '#d8000c' : 'inherit',
+                        }}
+                      >
+                        {rowData.map((cell, cellIndex) => (
+                          <td
+                            key={cellIndex}
+                            style={{
+                              border: '1px solid #ccc',
+                              padding: '5px',
+                            }}
+                          >
+                            {cell !== null && cell !== undefined && !Number.isNaN(cell) ? cell : 'N/A'}
+                          </td>
+                        ))}
+                      </tr>
+                    );
+                  })
+                ) : (
+                  <tr>
+                    <td colSpan={3} style={{ padding: '5px', color: '#999' }}>
+                      No train load data uploaded.
                     </td>
-                  ))}
-                </tr>
-              );
-            })
-          ) : (
-            <tr>
-              <td colSpan={3} style={{ padding: '5px', color: '#999' }}>
-                No train load data uploaded.
-              </td>
-            </tr>
-          )}
-        </tbody>
-      </table>
-    </div>
-  </Panel>
-</Grid>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </Panel>
+      </Grid>
 
-  {/* Output Chart Panel */}
-  <Grid item>
-    <Panel width="480px" height="248px" variant="strock" style={{ overflowX: 'auto' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <Typography variant="h1" color="primary">Speed vs Acceleration</Typography>
-        <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center'}}>
-          <ComponentsIconButtonDownload onClick={handleDownload} />
-          <ComponentsIconButtonExpand onClick={() => setIsGraphPopupOpen(true)} />
-        </div>
-      </div>
-      <div style={{ width: '100%', height: '220px', position: 'relative' }}>
-        <ChartLine
-          data={chartData.length > 0 ? chartData : staticChartData}
-          axisBottom
-          axisBottomTickValues={5}
-          axisBottomDecimals={1}
-          axisBottomLegend="Speed (km/h)"
-          axisLeft
-          axisLeftTickValues={5}
-          axisLeftDecimals={2}
-          axisLeftLegend="Acceleration (m/s²)"
-          width="100%"
-          height="100%"
-          pointSize={0}
-          marginTop={20}
-          marginRight={70}
-          marginLeft={60}
-          marginBottom={60}
-        />
+        {/* Output Chart Panel */}
+        <Grid item>
+          <Panel width="480px" height="248px" variant="strock" style={{ overflowX: 'auto' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <Typography variant="h1" color="primary">Speed vs Acceleration</Typography>
+              <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center'}}>
+                <ComponentsIconButtonDownload onClick={handleDownload} />
+                <ComponentsIconButtonExpand onClick={() => setIsGraphPopupOpen(true)} />
+              </div>
+            </div>
+            <div style={{ width: '100%', height: '220px', position: 'relative' }}>
+              <ChartLine
+                data={chartData.length > 0 ? chartData : staticChartData}
+                axisBottom
+                axisBottomTickValues={5}
+                axisBottomDecimals={1}
+                axisBottomLegend="Speed (km/h)"
+                axisLeft
+                axisLeftTickValues={5}
+                axisLeftDecimals={2}
+                axisLeftLegend="Acceleration (m/s²)"
+                width="100%"
+                height="100%"
+                pointSize={0}
+                marginTop={20}
+                marginRight={70}
+                marginLeft={60}
+                marginBottom={60}
+              />
 
-      </div>
-    </Panel>
-  </Grid>
-  <div style={{ position: 'absolute', left: '-9999px', top: '-9999px' }}>
-        <div ref={hiddenChartRef}>
-          <ChartLine
-            data={chartData.length > 0 ? chartData : staticChartData}
-            axisBottom
-            axisBottomTickValues={5}
-            axisBottomDecimals={1}
-            axisBottomLegend="Speed (km/h)"
-            axisLeft
-            axisLeftTickValues={5}
-            axisLeftDecimals={2}
-            axisLeftLegend="Acceleration (m/s²)"
-            width={950}
-            height={500}
-            pointSize={0}
-            marginTop={20}
-            marginRight={70}
-            marginLeft={60}
-            marginBottom={60}
-          />
-        </div>
-      </div>
-<GraphPopupDialog
-  isOpen={isGraphPopupOpen}
-  setIsOpen={setIsGraphPopupOpen}
-  chartData={chartData.length > 0 ? chartData : staticChartData}
-/>
-
-
-
-</Grid>
-
-      </div>
+            </div>
           </Panel>
-    {/* </Panel> */}
-  </div>
+        </Grid>
+        <div style={{ position: 'absolute', left: '-9999px', top: '-9999px' }}>
+              <div ref={hiddenChartRef}>
+                <ChartLine
+                  data={chartData.length > 0 ? chartData : staticChartData}
+                  axisBottom
+                  axisBottomTickValues={5}
+                  axisBottomDecimals={1}
+                  axisBottomLegend="Speed (km/h)"
+                  axisLeft
+                  axisLeftTickValues={5}
+                  axisLeftDecimals={2}
+                  axisLeftLegend="Acceleration (m/s²)"
+                  width={950}
+                  height={500}
+                  pointSize={0}
+                  marginTop={20}
+                  marginRight={70}
+                  marginLeft={60}
+                  marginBottom={60}
+                />
+              </div>
+            </div>
+      <GraphPopupDialog
+        isOpen={isGraphPopupOpen}
+        setIsOpen={setIsGraphPopupOpen}
+        chartData={chartData.length > 0 ? chartData : staticChartData}
+      />
+
+
+
+      </Grid>
+
+    </div>
+          </Panel>
+  </Panel>
+
 );
 };
 
