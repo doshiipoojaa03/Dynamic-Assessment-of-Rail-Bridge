@@ -550,14 +550,21 @@ def run_analysis_with_inputs(initial, final, step, time_step, bridge_type, dampi
         else:
             abs_max_values.append(0)
 
-    x_vals = np.array(speeds).astype(int)
-    y_vals = np.array(abs_max_values)
+    desired_speeds = np.arange(initial, final + step, step)
+    
+    all_speeds = np.array(speeds).astype(int)         # original speeds array
+    all_accelerations = np.array(abs_max_values)       # original y-values
+     
+    mask = np.isin(all_speeds, desired_speeds)
+    x_vals = all_speeds[mask]
+    y_vals = all_accelerations[mask]
+    
     sorted_idx = np.argsort(x_vals)
     x_vals = x_vals[sorted_idx]
     y_vals = y_vals[sorted_idx]
 
-    x_smooth = np.arange(initial, final + step, step)
-    spline = make_interp_spline(x_vals, y_vals, k=2)
+    x_smooth = np.linspace(x_vals.min(), x_vals.max())
+    spline = make_interp_spline(x_smooth, y_vals, k=2)
     y_smooth = spline(x_smooth)
 
     # Convert to regular lists for JS/React
