@@ -10,6 +10,8 @@ import ComponentsIconButtonExpand from "./Components/ComponentsIconButtonExpand"
 import ComponentsIconButtonDownload from "./Components/ComponentsIconButtonDownload";
 import * as XLSX from 'xlsx';
 import html2canvas from 'html2canvas';
+import ExcelJS from "exceljs";
+import { saveAs } from "file-saver"; 
 
 const WrappedApp = () => {
 	// Rail Load API
@@ -283,15 +285,57 @@ const handleRunAnalysis = async () => {
 
   const hiddenChartRef = useRef<HTMLDivElement>(null);
 
-  const handleDownload = async () => {
-    if (hiddenChartRef.current) {
-      const canvas = await html2canvas(hiddenChartRef.current, { scale: 2 });
-      const link = document.createElement("a");
-      link.download = "speed_vs_acceleration.png";
-      link.href = canvas.toDataURL("image/png");
-      link.click();
-    }
-  };
+ const handleDownload = async () => {
+  if (!hiddenChartRef.current) return;
+
+  // 🖼 Capture chart as PNG
+  const canvas = await html2canvas(hiddenChartRef.current, { scale: 2 });
+  const imgData = canvas.toDataURL("image/png").split(",")[1];
+  const imgBuffer = Uint8Array.from(atob(imgData), (c) => c.charCodeAt(0));
+
+  // 📒 Create workbook & worksheet
+  const workbook = new ExcelJS.Workbook();
+  const sheet = workbook.addWorksheet("Speed vs Acceleration");
+
+  // Assuming you already have user inputs from state or props:
+  // initialSpeed, finalSpeed, speedIncrement
+  const speeds = [];
+  for (let s = initialSpeed; s <= finalSpeed; s += speedIncrement) {
+    speeds.push(s);
+  }
+
+  // 📊 Extract acceleration values from chart data
+  const points = (chartData.length > 0 ? chartData : staticChartData)[0].data;
+
+  // Ensure data length matches speeds array
+  const accelValues = points.map((pt) => pt.y).slice(0, speeds.length);
+
+  // 📝 Add header row
+  // If you want cumulative time, uncomment "Time (s)" in header
+  sheet.addRow(["Speed (m/s)", "Acceleration (m/s²)"]); 
+
+  // Fill rows: Speed + Acceleration
+  speeds.forEach((speed, index) => {
+    sheet.addRow([speed, accelValues[index] ?? ""]);
+  });
+
+  // 🖼 Embed chart image
+  const imageId = workbook.addImage({
+    buffer: imgBuffer,
+    extension: "png",
+  });
+  sheet.addImage(imageId, {
+    tl: { col: 3, row: 0 },
+    ext: { width: 500, height: 300 },
+  });
+
+  // 💾 Save Excel file
+  const buffer = await workbook.xlsx.writeBuffer();
+  saveAs(new Blob([buffer]), "speed_vs_acceleration.xlsx");
+};
+
+
+
 
   function handleReset() {
     setInitialSpeed('60');
