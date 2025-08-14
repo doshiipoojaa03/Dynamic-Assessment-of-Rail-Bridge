@@ -312,7 +312,7 @@ export async function runAnalysisWithInputsUI(params: {
       globalkey
     );
 
-    console.log("Raw result from run_analysis_with_inputs:", result);
+    // console.log("Raw result from run_analysis_with_inputs:", result);
 
     try {
       const parsed = JSON.parse(result);

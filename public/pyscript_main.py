@@ -550,28 +550,34 @@ def run_analysis_with_inputs(initial, final, step, time_step, bridge_type, dampi
         else:
             abs_max_values.append(0)
 
-    desired_speeds = np.arange(initial, final + step, step)
-    
-    all_speeds = np.array(speeds).astype(int)         # original speeds array
-    all_accelerations = np.array(abs_max_values)       # original y-values
-     
-    mask = np.isin(all_speeds, desired_speeds)
-    x_vals = all_speeds[mask]
-    y_vals = all_accelerations[mask]
+    x_vals = np.array(speeds).astype(int)
+    y_vals = np.array(abs_max_values)
     
     sorted_idx = np.argsort(x_vals)
     x_vals = x_vals[sorted_idx]
     y_vals = y_vals[sorted_idx]
 
-    x_smooth = np.linspace(x_vals.min(), x_vals.max())
-    spline = make_interp_spline(x_smooth, y_vals, k=2)
+    x_smooth = np.linspace(x_vals.min(), x_vals.max(), 300)
+    spline = make_interp_spline(x_vals, y_vals, k=2)
     y_smooth = spline(x_smooth)
 
     # Convert to regular lists for JS/React
-    points = [{"x": float(x), "y": float(y)} for x, y in zip(x_smooth, y_smooth)]
+    graph_points = [{"x": float(x), "y": float(y)} for x, y in zip(x_smooth, y_smooth)]
+    
+    # To extract the points for excel
+    desired_speeds = np.arange(initial, final + step, step)
+    excel_points = []
+    for target in desired_speeds:
+        if len(x_vals) > 0:
+            idx = np.argmin(np.abs(x_vals - target))  # nearest available
+            excel_points.append({
+                "speed": float(x_vals[idx]),
+                "value": float(y_vals[idx])
+            })
 
     result = {
         "status": "completed",
-        "points": points
+        "points": graph_points,
+        "excel_points": excel_points 
     }
     return json.dumps(result)

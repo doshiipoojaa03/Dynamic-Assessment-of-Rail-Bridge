@@ -12,6 +12,7 @@ import * as XLSX from 'xlsx';
 import html2canvas from 'html2canvas';
 import ExcelJS from "exceljs";
 import { saveAs } from "file-saver"; 
+import { log } from "console";
 
 const WrappedApp = () => {
 	// Rail Load API
@@ -39,10 +40,17 @@ const WrappedApp = () => {
   const [railTrackNode, setRailTrackNode] = useState<string>('');
   const [accelerationNode, setAccelerationNode] = useState<string>('');
   const [availableGroups, setAvailableGroups] = useState<Map<string, string>>(new Map());
+  const [excelPointsArray, setExcelPointsArray] = useState<{ speed: number; value: number }[]>([]);
+
   
   type ChartDatum = { x: number; y: number };
-  type LineSeries = { id: string; color: string; data: ChartDatum[] };
-  
+
+  type LineSeries = {
+    id: string;
+    color: string;
+    data: ChartDatum[];
+  };
+
   
   const [chartData, setChartData] = useState<LineSeries[]>([]);
   const [staticChartData, setStaticChartData] = useState<LineSeries[]>([]);
@@ -76,8 +84,9 @@ const WrappedApp = () => {
   }
 
   setStaticChartData(staticSeries);
-}, []);
+  }, []);
 
+  
 
   const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
   const file = event.target.files?.[0];
@@ -253,16 +262,48 @@ const handleRunAnalysis = async () => {
       globalkey,
     });
 
-    if (result.status === "completed" && Array.isArray(result.points)) {
-      const lineData: LineSeries[] = [
-        {
-          id: "Speed vs Acceleration",
-          color: "red",
-          data: result.points,
-        },
-      ];
+     if (
+      result.status === "completed" &&
+      Array.isArray(result.points) &&
+      Array.isArray(result.excel_points)
+    ) {
+      console.log("Graph Points", result.points);
+      console.log("Excel Points", result.excel_points);
+      
+      
+      if (result.points.length === 0 || result.excel_points.length === 0) {
+    enqueueSnackbar("Analysis completed but no data points were returned.", {
+      variant: 'warning',
+      anchorOrigin: { vertical: 'top', horizontal: 'center' },
+    });
+    return;
+  }
 
-      setChartData(lineData);
+  // const chartPoints = result.points.map(([x, y]: [number, number]) => ({ x, y }));
+  // const excelPoints = result.excel_points.map(([speed, value]: [number, number]) => ({
+  //   speed,
+  //   value,
+  // }));
+
+setChartData([
+  {
+    id: "Speed vs Acceleration",
+    color: 'red',
+    data: result.points.map((p: any) => ({
+      x: Number(p.x ?? p.speed), // support both keys if needed
+      y: Number(p.y ?? p.value),
+    })),
+  },
+]);
+
+setExcelPointsArray(
+  result.excel_points.map((p: any) => ({
+    speed: Number(p.speed),
+    value: Number(p.value),
+  }))
+);
+
+
 
       enqueueSnackbar("Analysis completed successfully!", {
         variant: 'success',
@@ -285,56 +326,41 @@ const handleRunAnalysis = async () => {
 
   const hiddenChartRef = useRef<HTMLDivElement>(null);
 
- const handleDownload = async () => {
-  if (!hiddenChartRef.current) return;
+  const handleDownload = async (excelPointsArray: { speed: number; value: number }[]) => {
+    if (!hiddenChartRef.current) return;
 
-  // 🖼 Capture chart as PNG
-  const canvas = await html2canvas(hiddenChartRef.current, { scale: 2 });
-  const imgData = canvas.toDataURL("image/png").split(",")[1];
-  const imgBuffer = Uint8Array.from(atob(imgData), (c) => c.charCodeAt(0));
+    // 1️⃣ Capture chart as PNG
+    const canvas = await html2canvas(hiddenChartRef.current, { scale: 2 });
+    const imgData = canvas.toDataURL("image/png").split(",")[1];
+    const imgBuffer = Uint8Array.from(atob(imgData), (c) => c.charCodeAt(0));
 
-  // 📒 Create workbook & worksheet
-  const workbook = new ExcelJS.Workbook();
-  const sheet = workbook.addWorksheet("Speed vs Acceleration");
+    // 2️⃣ Create workbook & worksheet
+    const workbook = new ExcelJS.Workbook();
+    const sheet = workbook.addWorksheet("Graph Data");
 
-  // Assuming you already have user inputs from state or props:
-  // initialSpeed, finalSpeed, speedIncrement
-  const speeds = [];
-  for (let s = initialSpeed; s <= finalSpeed; s += speedIncrement) {
-    speeds.push(s);
-  }
+    // 3️⃣ Add table header
+    sheet.addRow(["Speed (km/h)", "Acceleration (m/s²)"]);
 
-  // 📊 Extract acceleration values from chart data
-  const points = (chartData.length > 0 ? chartData : staticChartData)[0].data;
+    // 4️⃣ Add rows from passed array
+    excelPointsArray.forEach((pt) => {
+      sheet.addRow([pt.speed, pt.value]);
+    });
 
-  // Ensure data length matches speeds array
-  const accelValues = points.map((pt) => pt.y).slice(0, speeds.length);
+    // 5️⃣ Add image with 2-column and 1-row gap
+    const imageId = workbook.addImage({
+      buffer: imgBuffer,
+      extension: "png",
+    });
 
-  // 📝 Add header row
-  // If you want cumulative time, uncomment "Time (s)" in header
-  sheet.addRow(["Speed (m/s)", "Acceleration (m/s²)"]); 
+    sheet.addImage(imageId, {
+      tl: { col: 4, row: 2 },
+      ext: { width: 500, height: 300 },
+    });
 
-  // Fill rows: Speed + Acceleration
-  speeds.forEach((speed, index) => {
-    sheet.addRow([speed, accelValues[index] ?? ""]);
-  });
-
-  // 🖼 Embed chart image
-  const imageId = workbook.addImage({
-    buffer: imgBuffer,
-    extension: "png",
-  });
-  sheet.addImage(imageId, {
-    tl: { col: 3, row: 0 },
-    ext: { width: 500, height: 300 },
-  });
-
-  // 💾 Save Excel file
-  const buffer = await workbook.xlsx.writeBuffer();
-  saveAs(new Blob([buffer]), "speed_vs_acceleration.xlsx");
-};
-
-
+    // 6️⃣ Save file
+    const buffer = await workbook.xlsx.writeBuffer();
+    saveAs(new Blob([buffer]), "speed_vs_acceleration.xlsx");
+  };
 
 
   function handleReset() {
@@ -595,7 +621,7 @@ return (
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <Typography variant="h1" color="primary">Speed vs Acceleration</Typography>
               <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center'}}>
-                <ComponentsIconButtonDownload onClick={handleDownload} />
+                <ComponentsIconButtonDownload onClick={() => handleDownload(excelPointsArray)} />
                 <ComponentsIconButtonExpand onClick={() => setIsGraphPopupOpen(true)} />
               </div>
             </div>
