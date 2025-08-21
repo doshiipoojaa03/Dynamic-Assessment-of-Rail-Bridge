@@ -536,6 +536,7 @@ def run_analysis_with_inputs(initial, final, step, time_step, bridge_type, dampi
     for x in speeds:
         acc = {
             "Argument": {
+                "TABLE_NAME": "TH",
                 "TABLE_TYPE": "THISABSOLUTEACCEL",
                 "COMPONENTS": ["DZ/DZ"],
                 "NODE_ELEMS": {"KEYS": girder_nodes_list},
@@ -543,8 +544,9 @@ def run_analysis_with_inputs(initial, final, step, time_step, bridge_type, dampi
             }
         }
         response = MidasAPI_gen("POST", "/post/table",acc)
-        if response and "empty" in response and "DATA" in response["empty"]:
-            data_rows = response["empty"]["DATA"]
+        # print(response)
+        if response and "TH" in response and "DATA" in response["TH"]:
+            data_rows = response["TH"]["DATA"]
             dz_dz_values = [abs(float(row[1])) for row in data_rows]
             abs_max_values.append(max(dz_dz_values))
         else:

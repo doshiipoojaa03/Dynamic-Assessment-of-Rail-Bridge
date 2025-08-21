@@ -349,7 +349,6 @@ const WrappedApp = () => {
     saveAs(new Blob([buffer]), "speed_vs_acceleration.xlsx");
   };
 
-
   function handleReset() {
     setInitialSpeed('60');
     setFinalSpeed('200');
