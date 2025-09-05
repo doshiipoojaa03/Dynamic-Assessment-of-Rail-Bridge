@@ -520,8 +520,15 @@ def run_analysis_with_inputs(initial, final, step, time_step, bridge_type, dampi
     THLC, THFC, THNL = force_functions(train_load, coordinate, speeds, bridge_length, train_length, damping_val, time_step)
     # print(THLC,THFC,THNL)
     THFC_clean = convert_numpy(THFC)
+    assign_data = list(THFC_clean["Assign"].items())
+
+    for i in range(0, len(assign_data), 100):
+        batch = dict(assign_data[i:i+100])   # take 100 functions at a time
+        payload = {"Assign": batch}
+        MidasAPI_gen("PUT", "/db/thfc", payload)
+
+
     # print(THFC_clean)
-    MidasAPI_gen("PUT","/db/thfc", THFC_clean)
     
     THLC_clean = convert_numpy(THLC)
     THNL_clean = convert_numpy(THNL)

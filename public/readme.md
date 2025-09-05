@@ -1,3 +1,5 @@
+![](https://hubs.ly/Q03GR7NJ0)
+
 # Dynamic Analysis of Rail Bridge
 
 - The **dynamic analysis of rail bridges** requires precise evaluation of structural accelerations under varying train loads and operating speeds. This application automates the generation of multiple time-history load cases within the analytical model, significantly reducing manual effort in load definition, data extraction, and result interpretation. It improves efficiency and ensures accurate, consistent assessment of the bridge’s dynamic response.
