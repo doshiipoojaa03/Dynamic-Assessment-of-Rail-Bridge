@@ -39,3 +39,8 @@
 ### version 1.0.0
 
 - Initial release
+
+### version 1.0.1
+
+- Added Demonstration Video.
+- Added Error Handling of 100 Time History Functions at a Time.

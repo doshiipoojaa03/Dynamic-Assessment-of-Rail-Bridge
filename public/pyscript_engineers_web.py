@@ -23,10 +23,8 @@ def get_g_values():
 # from javascript import globalThis
 # fetch = globalThis.fetch
 # JSON = globalThis.JSON
-
-
-import json
 from js import fetch, JSON, XMLHttpRequest
+import json
 
 import numpy as np
 
@@ -642,6 +640,7 @@ class GeometryCalculation:
         possible_planes = []
         for i in range(len(elem_list)-2):
             possible_planes += list(combinations(elem_list, i + 3))
+            print(elem_list)
 
         # Create Possible Planes List (nodes list)
         possible_plane_node_list = []
